@@ -6,6 +6,7 @@ export const sendToSheet = async (data: {
   startTime?: string | null;
   endTime?: string | null;
   breakDuration?: number;
+  onBreak?: boolean;
 }) => {
   const res = await fetch(GAS_URL, {
     method: 'POST',
