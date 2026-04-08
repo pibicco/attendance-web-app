@@ -5,9 +5,13 @@ import type { TimeRecord } from '../store/attendanceStore';
 import { getTodayRecord, sendToSheet } from '../utils/gas';
 import '../styles/Home.css';
 
+type SyncedTimeRecord = TimeRecord & {
+  breakStartTime?: string | null;
+};
+
 export const Home: React.FC = () => {
   const [today, setToday] = useState<string>('');
-  const [todayRecord, setTodayRecord] = useState<TimeRecord | null>(null);
+  const [todayRecord, setTodayRecord] = useState<SyncedTimeRecord | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
   const [submitting, setSubmitting] = useState<boolean>(false);
 
@@ -50,6 +54,7 @@ export const Home: React.FC = () => {
         endTime: '',
         breakDuration: 0,
         onBreak: false,
+        breakStartTime: '',
       });
 
       await refreshData();
@@ -67,12 +72,15 @@ export const Home: React.FC = () => {
     try {
       setSubmitting(true);
 
+      const now = format(new Date(), 'HH:mm');
+
       await sendToSheet({
         date: today,
         startTime: todayRecord.startTime,
         endTime: todayRecord.endTime,
         breakDuration: todayRecord.breakDuration,
         onBreak: true,
+        breakStartTime: now,
       });
 
       await refreshData();
@@ -85,12 +93,19 @@ export const Home: React.FC = () => {
   };
 
   const handleBreakEnd = async () => {
-    if (!todayRecord) return;
+    if (!todayRecord || !todayRecord.breakStartTime) return;
 
     try {
       setSubmitting(true);
 
-      const breakMinutes = 30;
+      const now = format(new Date(), 'HH:mm');
+
+      const [startH, startM] = todayRecord.breakStartTime.split(':').map(Number);
+      const [endH, endM] = now.split(':').map(Number);
+
+      let breakMinutes = endH * 60 + endM - (startH * 60 + startM);
+      if (breakMinutes < 0) breakMinutes += 24 * 60;
+
       const nextBreakDuration = todayRecord.breakDuration + breakMinutes;
 
       await sendToSheet({
@@ -99,6 +114,7 @@ export const Home: React.FC = () => {
         endTime: todayRecord.endTime,
         breakDuration: nextBreakDuration,
         onBreak: false,
+        breakStartTime: '',
       });
 
       await refreshData();
@@ -124,6 +140,7 @@ export const Home: React.FC = () => {
         endTime: now,
         breakDuration: todayRecord.breakDuration,
         onBreak: false,
+        breakStartTime: '',
       });
 
       await refreshData();
@@ -141,8 +158,10 @@ export const Home: React.FC = () => {
     const [startH, startM] = todayRecord.startTime.split(':').map(Number);
     const [endH, endM] = todayRecord.endTime.split(':').map(Number);
 
-    const workingMinutes =
+    let workingMinutes =
       endH * 60 + endM - (startH * 60 + startM) - todayRecord.breakDuration;
+
+    if (workingMinutes < 0) workingMinutes += 24 * 60;
 
     const hours = Math.floor(workingMinutes / 60);
     const minutes = workingMinutes % 60;
@@ -232,7 +251,9 @@ export const Home: React.FC = () => {
             <span>退勤: {todayRecord.endTime || '-'}</span>
             <span>休憩: {todayRecord.breakDuration}分</span>
             {onBreak && (
-              <span style={{ color: '#ff9800', fontWeight: 'bold' }}>（休憩中）</span>
+              <span style={{ color: '#ff9800', fontWeight: 'bold' }}>
+                （休憩中: {todayRecord.breakStartTime || '--:--'}開始）
+              </span>
             )}
           </div>
         </div>
