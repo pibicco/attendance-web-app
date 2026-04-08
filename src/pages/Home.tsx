@@ -16,11 +16,8 @@ export const Home: React.FC = () => {
   const [submitting, setSubmitting] = useState<boolean>(false);
 
   const getTodayString = () => {
-    const now = new Date();
-    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(
-      now.getDate()
-    ).padStart(2, '0')}`;
-  };
+  return new Date().toLocaleDateString('sv-SE');
+};
 
   const refreshData = async () => {
     const dateStr = getTodayString();
