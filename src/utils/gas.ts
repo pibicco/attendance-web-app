@@ -7,6 +7,7 @@ export const sendToSheet = async (data: {
   endTime?: string | null;
   breakDuration?: number;
   onBreak?: boolean;
+  breakStartTime?: string | null;
 }) => {
   const res = await fetch(GAS_URL, {
     method: 'POST',
@@ -39,5 +40,6 @@ export const getTodayRecord = async (date: string) => {
     endTime: string | null;
     breakDuration: number;
     onBreak: boolean;
+    breakStartTime: string | null;
   } | null;
 };
