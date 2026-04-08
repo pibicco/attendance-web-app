@@ -15,25 +15,27 @@ export const Home: React.FC = () => {
   const [loading, setLoading] = useState<boolean>(true);
   const [submitting, setSubmitting] = useState<boolean>(false);
 
-  const getTodayString = () => {
+const getTodayString = () => {
   return new Date().toLocaleDateString('sv-SE');
 };
+  
+ const refreshData = async () => {
+  const dateStr = getTodayString();
+  setToday(dateStr);
 
-  const refreshData = async () => {
-    const dateStr = getTodayString();
-    setToday(dateStr);
-
-    try {
-      setLoading(true);
-      const record = await getTodayRecord(dateStr);
-      setTodayRecord(record || null);
-    } catch (error) {
-      console.error('データ取得失敗:', error);
-      setTodayRecord(null);
-    } finally {
-      setLoading(false);
-    }
-  };
+  try {
+    setLoading(true);
+    console.log('取得日付:', dateStr);
+    const record = await getTodayRecord(dateStr);
+    console.log('取得結果:', record);
+    setTodayRecord(record || null);
+  } catch (error) {
+    console.error('データ取得失敗:', error);
+    setTodayRecord(null);
+  } finally {
+    setLoading(false);
+  }
+};
 
   useEffect(() => {
     refreshData();
