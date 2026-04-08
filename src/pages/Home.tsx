@@ -15,34 +15,26 @@ export const Home: React.FC = () => {
   const [loading, setLoading] = useState<boolean>(true);
   const [submitting, setSubmitting] = useState<boolean>(false);
 
-const getTodayString = () => {
-  return new Date().toLocaleDateString('sv-SE');
-};
+  const getTodayString = () => {
+    return new Date().toLocaleDateString('sv-SE');
+  };
 
-const handleClockIn = async () => {
-  try {
-    setSubmitting(true);
+  const refreshData = async () => {
+    const dateStr = getTodayString();
+    setToday(dateStr);
 
-    const todayStr = getTodayString();
-    const now = format(new Date(), 'HH:mm');
+    try {
+      setLoading(true);
+      const record = await getTodayRecord(dateStr);
+      setTodayRecord(record || null);
+    } catch (error) {
+      console.error('データ取得失敗:', error);
+      setTodayRecord(null);
+    } finally {
+      setLoading(false);
+    }
+  };
 
-    await sendToSheet({
-      date: todayStr,
-      startTime: now,
-      endTime: '',
-      breakDuration: 0,
-      onBreak: false,
-      breakStartTime: '',
-    });
-
-    await refreshData();
-  } catch (error) {
-    console.error('出勤の送信に失敗:', error);
-    alert('出勤データの送信に失敗しました');
-  } finally {
-    setSubmitting(false);
-  }
-};
   useEffect(() => {
     refreshData();
   }, []);
@@ -51,10 +43,11 @@ const handleClockIn = async () => {
     try {
       setSubmitting(true);
 
+      const todayStr = getTodayString();
       const now = format(new Date(), 'HH:mm');
 
       await sendToSheet({
-        date: today,
+        date: todayStr,
         startTime: now,
         endTime: '',
         breakDuration: 0,
@@ -77,10 +70,11 @@ const handleClockIn = async () => {
     try {
       setSubmitting(true);
 
+      const todayStr = getTodayString();
       const now = format(new Date(), 'HH:mm');
 
       await sendToSheet({
-        date: today,
+        date: todayStr,
         startTime: todayRecord.startTime,
         endTime: todayRecord.endTime,
         breakDuration: todayRecord.breakDuration,
@@ -103,6 +97,7 @@ const handleClockIn = async () => {
     try {
       setSubmitting(true);
 
+      const todayStr = getTodayString();
       const now = format(new Date(), 'HH:mm');
 
       const [startH, startM] = todayRecord.breakStartTime.split(':').map(Number);
@@ -114,7 +109,7 @@ const handleClockIn = async () => {
       const nextBreakDuration = todayRecord.breakDuration + breakMinutes;
 
       await sendToSheet({
-        date: today,
+        date: todayStr,
         startTime: todayRecord.startTime,
         endTime: todayRecord.endTime,
         breakDuration: nextBreakDuration,
@@ -137,10 +132,11 @@ const handleClockIn = async () => {
     try {
       setSubmitting(true);
 
+      const todayStr = getTodayString();
       const now = format(new Date(), 'HH:mm');
 
       await sendToSheet({
-        date: today,
+        date: todayStr,
         startTime: todayRecord.startTime,
         endTime: now,
         breakDuration: todayRecord.breakDuration,
