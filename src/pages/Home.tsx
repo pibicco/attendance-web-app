@@ -18,25 +18,31 @@ export const Home: React.FC = () => {
 const getTodayString = () => {
   return new Date().toLocaleDateString('sv-SE');
 };
-  
- const refreshData = async () => {
-  const dateStr = getTodayString();
-  setToday(dateStr);
 
+const handleClockIn = async () => {
   try {
-    setLoading(true);
-    console.log('取得日付:', dateStr);
-    const record = await getTodayRecord(dateStr);
-    console.log('取得結果:', record);
-    setTodayRecord(record || null);
+    setSubmitting(true);
+
+    const todayStr = getTodayString();
+    const now = format(new Date(), 'HH:mm');
+
+    await sendToSheet({
+      date: todayStr,
+      startTime: now,
+      endTime: '',
+      breakDuration: 0,
+      onBreak: false,
+      breakStartTime: '',
+    });
+
+    await refreshData();
   } catch (error) {
-    console.error('データ取得失敗:', error);
-    setTodayRecord(null);
+    console.error('出勤の送信に失敗:', error);
+    alert('出勤データの送信に失敗しました');
   } finally {
-    setLoading(false);
+    setSubmitting(false);
   }
 };
-
   useEffect(() => {
     refreshData();
   }, []);
