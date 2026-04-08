@@ -1,0 +1,116 @@
+.monthly-container {
+  max-width: 800px;
+  margin: 0 auto;
+  padding: 20px;
+}
+
+.monthly-header {
+  text-align: center;
+  margin-bottom: 24px;
+}
+
+.monthly-header h1 {
+  font-size: 24px;
+  color: #333;
+}
+
+.month-selector {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 24px;
+  gap: 12px;
+}
+
+.month-selector button {
+  background: #f0f0f0;
+  border: none;
+  padding: 8px 16px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 14px;
+}
+
+.month-selector button:hover {
+  background: #e0e0e0;
+}
+
+.month-label {
+  font-size: 18px;
+  font-weight: 600;
+  color: #333;
+  flex: 1;
+  text-align: center;
+}
+
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+  margin-bottom: 24px;
+}
+
+.stat-card {
+  background: white;
+  border: 1px solid #e0e0e0;
+  border-radius: 8px;
+  padding: 16px;
+  text-align: center;
+}
+
+.stat-label {
+  font-size: 12px;
+  color: #999;
+  margin-bottom: 8px;
+}
+
+.stat-value {
+  font-size: 24px;
+  font-weight: bold;
+  color: #0a7ea4;
+}
+
+.chart-container {
+  background: white;
+  border: 1px solid #e0e0e0;
+  border-radius: 8px;
+  padding: 16px;
+  margin-bottom: 24px;
+}
+
+.chart-container h3 {
+  font-size: 16px;
+  color: #333;
+  margin-bottom: 16px;
+}
+
+.no-data {
+  text-align: center;
+  padding: 40px 20px;
+  color: #999;
+}
+
+.export-section {
+  background: #f9f9f9;
+  border-radius: 8px;
+  padding: 16px;
+  text-align: center;
+}
+
+.export-section h3 {
+  font-size: 16px;
+  color: #333;
+  margin-bottom: 12px;
+}
+
+.export-note {
+  font-size: 12px;
+  color: #999;
+  margin-top: 12px;
+}
+
+@media (max-width: 768px) {
+  .stats-grid {
+    grid-template-columns: 1fr;
+  }
+}
