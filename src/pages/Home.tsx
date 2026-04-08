@@ -49,6 +49,7 @@ export const Home: React.FC = () => {
         startTime: now,
         endTime: '',
         breakDuration: 0,
+        onBreak: false,
       });
 
       await refreshData();
@@ -60,9 +61,26 @@ export const Home: React.FC = () => {
     }
   };
 
-  const handleBreakStart = () => {
-    if (todayRecord) {
-      setTodayRecord({ ...todayRecord, onBreak: true });
+  const handleBreakStart = async () => {
+    if (!todayRecord) return;
+
+    try {
+      setSubmitting(true);
+
+      await sendToSheet({
+        date: today,
+        startTime: todayRecord.startTime,
+        endTime: todayRecord.endTime,
+        breakDuration: todayRecord.breakDuration,
+        onBreak: true,
+      });
+
+      await refreshData();
+    } catch (error) {
+      console.error('休憩開始の送信に失敗:', error);
+      alert('休憩開始データの送信に失敗しました');
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -80,18 +98,13 @@ export const Home: React.FC = () => {
         startTime: todayRecord.startTime,
         endTime: todayRecord.endTime,
         breakDuration: nextBreakDuration,
-      });
-
-      setTodayRecord({
-        ...todayRecord,
-        breakDuration: nextBreakDuration,
         onBreak: false,
       });
 
       await refreshData();
     } catch (error) {
       console.error('休憩終了の送信に失敗:', error);
-      alert('休憩データの送信に失敗しました');
+      alert('休憩終了データの送信に失敗しました');
     } finally {
       setSubmitting(false);
     }
@@ -110,6 +123,7 @@ export const Home: React.FC = () => {
         startTime: todayRecord.startTime,
         endTime: now,
         breakDuration: todayRecord.breakDuration,
+        onBreak: false,
       });
 
       await refreshData();
@@ -188,7 +202,7 @@ export const Home: React.FC = () => {
                 onClick={handleBreakStart}
                 disabled={submitting || loading}
               >
-                休憩開始
+                {submitting ? '送信中...' : '休憩開始'}
               </button>
             ) : (
               <button
