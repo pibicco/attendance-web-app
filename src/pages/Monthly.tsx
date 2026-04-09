@@ -1,16 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { format, parse } from 'date-fns';
 import { ja } from 'date-fns/locale';
-import {
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  Legend,
-  ResponsiveContainer,
-} from 'recharts';
 import { getMonthlyRecords } from '../utils/gas';
 import '../styles/Monthly.css';
 
