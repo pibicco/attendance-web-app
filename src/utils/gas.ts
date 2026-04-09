@@ -17,7 +17,15 @@ export const sendToSheet = async (data: {
     body: JSON.stringify(data),
   });
 
-  const result = await res.json();
+  const text = await res.text();
+  console.log('sendToSheet response:', text);
+
+  let result;
+  try {
+    result = JSON.parse(text);
+  } catch {
+    throw new Error(`JSONじゃない返答: ${text}`);
+  }
 
   if (!result.success) {
     throw new Error(result.error || '送信失敗');
