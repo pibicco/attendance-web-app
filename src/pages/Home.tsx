@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { format } from 'date-fns';
 import { ja } from 'date-fns/locale';
 import type { TimeRecord } from '../store/attendanceStore';
@@ -19,7 +19,7 @@ export const Home: React.FC = () => {
     return new Date().toLocaleDateString('sv-SE');
   };
 
-  const refreshData = async () => {
+  const refreshData = useCallback(async () => {
     const dateStr = getTodayString();
     setToday(dateStr);
 
@@ -33,11 +33,11 @@ export const Home: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
     refreshData();
-  }, []);
+  }, [refreshData]);
 
   const handleClockIn = async () => {
     try {

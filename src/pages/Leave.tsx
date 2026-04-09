@@ -21,7 +21,7 @@ export const Leave: React.FC = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const request: LeaveRequest = {
-      id: Date.now().toString(),
+      id: crypto.randomUUID(),
       date: formData.date,
       type: formData.type,
       reason: formData.reason,

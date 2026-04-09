@@ -1,6 +1,29 @@
 const GAS_URL =
   'https://flat-poetry-984a.ex24-kpp.workers.dev/';
 
+type ApiRecord = {
+  date: string;
+  startTime: string | null;
+  endTime: string | null;
+  breakDuration: number;
+  onBreak: boolean;
+  breakStartTime: string | null;
+};
+
+const parseJsonResponse = async <T>(res: Response): Promise<T> => {
+  const text = await res.text();
+
+  if (!res.ok) {
+    throw new Error(`HTTP ${res.status}: ${text || '通信失敗'}`);
+  }
+
+  try {
+    return JSON.parse(text) as T;
+  } catch {
+    throw new Error(`JSONじゃない返答: ${text}`);
+  }
+};
+
 export const sendToSheet = async (data: {
   date: string;
   startTime?: string | null;
@@ -17,15 +40,7 @@ export const sendToSheet = async (data: {
     body: JSON.stringify(data),
   });
 
-  const text = await res.text();
-  console.log('sendToSheet response:', text);
-
-  let result;
-  try {
-    result = JSON.parse(text);
-  } catch {
-    throw new Error(`JSONじゃない返答: ${text}`);
-  }
+  const result = await parseJsonResponse<{ success: boolean; error?: string }>(res);
 
   if (!result.success) {
     throw new Error(result.error || '送信失敗');
@@ -40,20 +55,17 @@ export const getTodayRecord = async (date: string) => {
     cache: 'no-store',
   });
 
-  const result = await res.json();
+  const result = await parseJsonResponse<{
+    success: boolean;
+    error?: string;
+    record: ApiRecord | null;
+  }>(res);
 
   if (!result.success) {
     throw new Error(result.error || '取得失敗');
   }
 
-  return result.record as {
-    date: string;
-    startTime: string | null;
-    endTime: string | null;
-    breakDuration: number;
-    onBreak: boolean;
-    breakStartTime: string | null;
-  } | null;
+  return result.record;
 };
 
 export const getMonthlyRecords = async (month: string) => {
@@ -62,18 +74,15 @@ export const getMonthlyRecords = async (month: string) => {
     cache: 'no-store',
   });
 
-  const result = await res.json();
+  const result = await parseJsonResponse<{
+    success: boolean;
+    error?: string;
+    records: ApiRecord[];
+  }>(res);
 
   if (!result.success) {
     throw new Error(result.error || '月間取得失敗');
   }
 
-  return result.records as {
-    date: string;
-    startTime: string | null;
-    endTime: string | null;
-    breakDuration: number;
-    onBreak: boolean;
-    breakStartTime: string | null;
-  }[];
+  return result.records;
 };

@@ -20,20 +20,20 @@ export const History: React.FC = () => {
 
   const monthKey = format(selectedMonth, 'yyyy-MM');
 
-  const refreshHistory = async () => {
-    try {
-      setLoading(true);
-      const result = await getMonthlyRecords(monthKey);
-      setRecords(result || []);
-    } catch (error) {
-      console.error('履歴取得失敗:', error);
-      setRecords([]);
-    } finally {
-      setLoading(false);
-    }
-  };
-
   useEffect(() => {
+    const refreshHistory = async () => {
+      try {
+        setLoading(true);
+        const result = await getMonthlyRecords(monthKey);
+        setRecords(result || []);
+      } catch (error) {
+        console.error('履歴取得失敗:', error);
+        setRecords([]);
+      } finally {
+        setLoading(false);
+      }
+    };
+
     refreshHistory();
   }, [monthKey]);
 
