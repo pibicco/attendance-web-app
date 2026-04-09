@@ -1,73 +1,88 @@
-# React + TypeScript + Vite
+# attendance-web-app
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+React + TypeScript + Vite で作られた勤怠管理アプリです。
 
-Currently, two official plugins are available:
+公開先:
+[https://pibicco.github.io/attendance-web-app/](https://pibicco.github.io/attendance-web-app/)
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+## できること
 
-## React Compiler
+- ホーム画面で当日の出勤、休憩、退勤を記録
+- 履歴画面で月ごとの勤怠一覧を確認
+- 集計画面で勤務日数や労働時間を確認
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+## 技術構成
 
-## Expanding the ESLint configuration
+- React 19
+- TypeScript
+- Vite
+- Zustand
+- date-fns
+- GitHub Pages
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
+## セットアップ
 
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
-
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+```bash
+npm install
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+## 開発コマンド
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+開発サーバー:
 
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+```bash
+npm run dev
 ```
+
+Lint:
+
+```bash
+npm run lint
+```
+
+本番ビルド:
+
+```bash
+npm run build
+```
+
+ローカルで本番ビルド確認:
+
+```bash
+npm run preview
+```
+
+## データ連携
+
+勤怠データの送受信は [`src/utils/gas.ts`](/Users/utsunomiyahibiki/pibicco/attendance-web-app-main/src/utils/gas.ts) から行っています。
+
+- `sendToSheet`: 出勤、休憩、退勤データの送信
+- `getTodayRecord`: 当日の勤怠取得
+- `getMonthlyRecords`: 月別勤怠取得
+
+通信先 URL はコード内で固定されています。
+
+## 画面構成
+
+- ホーム: 当日の勤務状況と打刻操作
+- 履歴: 月別の勤務履歴一覧
+- 集計: 月別の勤務集計
+
+画面切り替えは [`src/App.tsx`](/Users/utsunomiyahibiki/pibicco/attendance-web-app-main/src/App.tsx) の下部ナビゲーションで行っています。
+
+## デプロイ
+
+このリポジトリは GitHub Actions で GitHub Pages に公開されます。
+
+- `main` ブランチに push
+- GitHub Actions が `dist` をビルド
+- GitHub Pages に自動デプロイ
+
+ワークフロー定義:
+[`/.github/workflows/deploy.yml`](/Users/utsunomiyahibiki/pibicco/attendance-web-app-main/.github/workflows/deploy.yml)
+
+## 補足
+
+- `dist/` は生成物なのでコミット不要です
+- `.DS_Store` は `.gitignore` で除外しています
+- `package.json` にある `npm run deploy` は残っていますが、現在の公開フローは GitHub Actions ベースです
