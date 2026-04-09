@@ -11,13 +11,13 @@
 
 .home-header h1 {
   font-size: 24px;
-  color: #333;
+  color: #f3f4f6;
   margin-bottom: 8px;
 }
 
 .date-display {
   font-size: 16px;
-  color: #999;
+  color: #9ca3af;
 }
 
 .status-card {
@@ -41,7 +41,7 @@
 .status-item label {
   display: block;
   font-size: 12px;
-  opacity: 0.9;
+  opacity: 0.8;
   margin-bottom: 8px;
 }
 
@@ -64,15 +64,17 @@
   flex: 1;
 }
 
+/* 👇ここが白の原因だった */
 .recent-records {
-  background: #f9f9f9;
+  background: #1f2430;
   border-radius: 8px;
   padding: 16px;
+  border: 1px solid #2a2f3a;
 }
 
 .recent-records h3 {
   font-size: 14px;
-  color: #666;
+  color: #9ca3af;
   margin-bottom: 12px;
 }
 
@@ -80,7 +82,7 @@
   display: flex;
   justify-content: space-between;
   font-size: 14px;
-  color: #333;
+  color: #f3f4f6;
 }
 
 @media (max-width: 768px) {
