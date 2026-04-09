@@ -35,3 +35,4 @@ jobs:
         uses: actions/deploy-pages@v4
 node_modules/
 dist/
+.DS_Store
