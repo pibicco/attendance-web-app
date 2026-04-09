@@ -1,16 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { format, parse } from 'date-fns';
 import { ja } from 'date-fns/locale';
-import {
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  Legend,
-  ResponsiveContainer,
-} from 'recharts';
 import { getMonthlyRecords } from '../utils/gas';
 import '../styles/Monthly.css';
 
@@ -135,16 +125,9 @@ export const Monthly: React.FC = () => {
             <p>読み込み中...</p>
           </div>
         ) : monthlyStats.chartData.length > 0 ? (
-          <ResponsiveContainer width="100%" height={300}>
-            <BarChart data={monthlyStats.chartData}>
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="date" />
-              <YAxis />
-              <Tooltip />
-              <Legend />
-              <Bar dataKey="hours" fill="#0a7ea4" name="労働時間（時間）" />
-            </BarChart>
-          </ResponsiveContainer>
+          <div className="no-data">
+            <p>グラフデータ {monthlyStats.chartData.length}件</p>
+          </div>
         ) : (
           <div className="no-data">
             <p>この月の勤務記録がありません</p>
