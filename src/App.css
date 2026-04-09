@@ -10,14 +10,15 @@ body {
     sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  background-color: #f5f5f5;
+  background-color: #0f1115;
+  color: #f9fafb;
 }
 
 .app {
   display: flex;
   flex-direction: column;
   height: 100vh;
-  background-color: #ffffff;
+  background-color: #0f1115;
 }
 
 .app-content {
@@ -34,10 +35,10 @@ body {
   display: flex;
   justify-content: space-around;
   align-items: center;
-  background-color: #ffffff;
-  border-top: 1px solid #e0e0e0;
+  background-color: #171a21;
+  border-top: 1px solid #2a2f3a;
   height: 70px;
-  box-shadow: 0 -2px 8px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 -2px 8px rgba(0, 0, 0, 0.35);
 }
 
 .nav-item {
@@ -51,7 +52,7 @@ body {
   border: none;
   cursor: pointer;
   padding: 8px;
-  color: #999;
+  color: #9ca3af;
   font-size: 12px;
   transition: color 0.2s;
 }
@@ -200,9 +201,9 @@ textarea {
     flex-direction: column;
     width: 80px;
     height: 100vh;
-    border-right: 1px solid #e0e0e0;
+    border-right: 1px solid #2a2f3a;
     border-top: none;
-    box-shadow: 2px 0 8px rgba(0, 0, 0, 0.1);
+    box-shadow: 2px 0 8px rgba(0, 0, 0, 0.35);
   }
 
   .app-content {
