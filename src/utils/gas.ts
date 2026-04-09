@@ -1,5 +1,5 @@
 const GAS_URL =
-  'https://script.google.com/macros/s/AKfycbwl5vg1OMG5ZG7yo6DjXdmdSFgFX57x9_QkECt4Otm9pTICpifPBn-vVmL6egMGeySb/exec';
+  'https://flat-poetry-984a.ex24-kpp.workers.dev/';
 
 export const sendToSheet = async (data: {
   date: string;
@@ -12,7 +12,7 @@ export const sendToSheet = async (data: {
   const res = await fetch(GAS_URL, {
     method: 'POST',
     headers: {
-      'Content-Type': 'text/plain;charset=utf-8',
+      'Content-Type': 'application/json',
     },
     body: JSON.stringify(data),
   });
@@ -27,7 +27,11 @@ export const sendToSheet = async (data: {
 };
 
 export const getTodayRecord = async (date: string) => {
-  const res = await fetch(`${GAS_URL}?date=${encodeURIComponent(date)}`);
+  const res = await fetch(`${GAS_URL}?date=${encodeURIComponent(date)}&_=${Date.now()}`, {
+    method: 'GET',
+    cache: 'no-store',
+  });
+
   const result = await res.json();
 
   if (!result.success) {
