@@ -47,3 +47,25 @@ export const getTodayRecord = async (date: string) => {
     breakStartTime: string | null;
   } | null;
 };
+
+export const getMonthlyRecords = async (month: string) => {
+  const res = await fetch(`${GAS_URL}?month=${encodeURIComponent(month)}&_=${Date.now()}`, {
+    method: 'GET',
+    cache: 'no-store',
+  });
+
+  const result = await res.json();
+
+  if (!result.success) {
+    throw new Error(result.error || '月間取得失敗');
+  }
+
+  return result.records as {
+    date: string;
+    startTime: string | null;
+    endTime: string | null;
+    breakDuration: number;
+    onBreak: boolean;
+    breakStartTime: string | null;
+  }[];
+};
