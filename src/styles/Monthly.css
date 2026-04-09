@@ -11,7 +11,7 @@
 
 .monthly-header h1 {
   font-size: 24px;
-  color: #f3f4f6;
+  color: var(--text-h);
 }
 
 .month-selector {
@@ -23,23 +23,23 @@
 }
 
 .month-selector button {
-  background: #1f2430;
-  border: 1px solid #2a2f3a;
+  background: var(--code-bg);
+  border: 1px solid var(--border);
   padding: 8px 16px;
   border-radius: 6px;
   cursor: pointer;
   font-size: 14px;
-  color: #f3f4f6;
+  color: var(--text-h);
 }
 
 .month-selector button:hover {
-  background: #2a2f3a;
+  background: var(--social-bg);
 }
 
 .month-label {
   font-size: 18px;
   font-weight: 600;
-  color: #f3f4f6;
+  color: var(--text-h);
   flex: 1;
   text-align: center;
 }
@@ -51,10 +51,9 @@
   margin-bottom: 24px;
 }
 
-/* 👇 白→黒 */
 .stat-card {
-  background: #1f2430;
-  border: 1px solid #2a2f3a;
+  background: var(--code-bg);
+  border: 1px solid var(--border);
   border-radius: 8px;
   padding: 16px;
   text-align: center;
@@ -62,20 +61,19 @@
 
 .stat-label {
   font-size: 12px;
-  color: #9ca3af;
+  color: var(--text);
   margin-bottom: 8px;
 }
 
 .stat-value {
   font-size: 24px;
   font-weight: bold;
-  color: #4f9cf9;
+  color: var(--accent);
 }
 
-/* 👇 グラフ背景も黒 */
 .chart-container {
-  background: #1f2430;
-  border: 1px solid #2a2f3a;
+  background: var(--code-bg);
+  border: 1px solid var(--border);
   border-radius: 8px;
   padding: 16px;
   margin-bottom: 24px;
@@ -83,35 +81,14 @@
 
 .chart-container h3 {
   font-size: 16px;
-  color: #f3f4f6;
+  color: var(--text-h);
   margin-bottom: 16px;
 }
 
 .no-data {
   text-align: center;
   padding: 40px 20px;
-  color: #9ca3af;
-}
-
-/* 👇 白い部分潰し */
-.export-section {
-  background: #1f2430;
-  border: 1px solid #2a2f3a;
-  border-radius: 8px;
-  padding: 16px;
-  text-align: center;
-}
-
-.export-section h3 {
-  font-size: 16px;
-  color: #f3f4f6;
-  margin-bottom: 12px;
-}
-
-.export-note {
-  font-size: 12px;
-  color: #9ca3af;
-  margin-top: 12px;
+  color: var(--text);
 }
 
 @media (max-width: 768px) {
