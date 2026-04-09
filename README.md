@@ -85,4 +85,3 @@ npm run preview
 
 - `dist/` は生成物なのでコミット不要です
 - `.DS_Store` は `.gitignore` で除外しています
-- `package.json` にある `npm run deploy` は残っていますが、現在の公開フローは GitHub Actions ベースです
