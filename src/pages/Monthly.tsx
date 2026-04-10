@@ -84,6 +84,7 @@ export const Monthly: React.FC = () => {
   };
 
   const monthLabel = format(selectedMonth, 'yyyy年M月', { locale: ja });
+  const showInitialLoading = loading && records.length === 0;
 
   return (
     <div className="monthly-container">
@@ -101,26 +102,26 @@ export const Monthly: React.FC = () => {
         <div className="stat-card">
           <div className="stat-label">勤務日数</div>
           <div className="stat-value">
-            {loading ? '...' : `${monthlyStats.workingDays}日`}
+            {showInitialLoading ? '...' : `${monthlyStats.workingDays}日`}
           </div>
         </div>
         <div className="stat-card">
           <div className="stat-label">総労働時間</div>
           <div className="stat-value">
-            {loading ? '...' : `${monthlyStats.totalHours}時間`}
+            {showInitialLoading ? '...' : `${monthlyStats.totalHours}時間`}
           </div>
         </div>
         <div className="stat-card">
           <div className="stat-label">平均勤務時間</div>
           <div className="stat-value">
-            {loading ? '...' : `${monthlyStats.avgHours}時間`}
+            {showInitialLoading ? '...' : `${monthlyStats.avgHours}時間`}
           </div>
         </div>
       </div>
 
       <div className="chart-container">
         <h3>日別労働時間</h3>
-        {loading ? (
+        {showInitialLoading ? (
           <div className="no-data">
             <p>読み込み中...</p>
           </div>

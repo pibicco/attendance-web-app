@@ -1,6 +1,10 @@
 const GAS_URL =
   'https://flat-poetry-984a.ex24-kpp.workers.dev/';
 
+const TODAY_REQUEST_TTL_MS = 60 * 1000;
+const MONTHLY_REQUEST_TTL_MS = 10 * 60 * 1000;
+const SLOW_REQUEST_THRESHOLD_MS = 1000;
+
 type ApiRecord = {
   date: string;
   startTime: string | null;
@@ -9,6 +13,13 @@ type ApiRecord = {
   onBreak: boolean;
   breakStartTime: string | null;
 };
+
+type CacheEntry<T> = {
+  expiresAt: number;
+  promise: Promise<T>;
+};
+
+const responseCache = new Map<string, CacheEntry<unknown>>();
 
 const parseJsonResponse = async <T>(res: Response): Promise<T> => {
   const text = await res.text();
@@ -24,6 +35,47 @@ const parseJsonResponse = async <T>(res: Response): Promise<T> => {
   }
 };
 
+const cachedRequest = <T>(key: string, fetcher: () => Promise<T>, ttlMs: number) => {
+  const now = Date.now();
+  const cached = responseCache.get(key) as CacheEntry<T> | undefined;
+
+  if (cached && cached.expiresAt > now) {
+    return cached.promise;
+  }
+
+  const promise = fetcher().catch((error) => {
+    responseCache.delete(key);
+    throw error;
+  });
+
+  responseCache.set(key, {
+    expiresAt: now + ttlMs,
+    promise,
+  });
+
+  return promise;
+};
+
+const invalidateCache = (keyPrefix: string) => {
+  for (const key of responseCache.keys()) {
+    if (key.startsWith(keyPrefix)) {
+      responseCache.delete(key);
+    }
+  }
+};
+
+const logRequestDuration = (label: string, startedAt: number) => {
+  const duration = Math.round(performance.now() - startedAt);
+  const message = `[api] ${label}: ${duration}ms`;
+
+  if (duration >= SLOW_REQUEST_THRESHOLD_MS) {
+    console.warn(`${message} (slow)`);
+    return;
+  }
+
+  console.info(message);
+};
+
 export const sendToSheet = async (data: {
   date: string;
   startTime?: string | null;
@@ -32,57 +84,103 @@ export const sendToSheet = async (data: {
   onBreak?: boolean;
   breakStartTime?: string | null;
 }) => {
-  const res = await fetch(GAS_URL, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify(data),
-  });
+  const startedAt = performance.now();
+  const label = `POST attendance ${data.date}`;
 
-  const result = await parseJsonResponse<{ success: boolean; error?: string }>(res);
+  try {
+    const res = await fetch(GAS_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(data),
+    });
 
-  if (!result.success) {
-    throw new Error(result.error || '送信失敗');
+    const result = await parseJsonResponse<{ success: boolean; error?: string }>(res);
+
+    if (!result.success) {
+      throw new Error(result.error || '送信失敗');
+    }
+
+    invalidateCache('today:');
+    invalidateCache(`today:${data.date}`);
+    invalidateCache('month:');
+    invalidateCache(`month:${data.date.slice(0, 7)}`);
+
+    return result;
+  } finally {
+    logRequestDuration(label, startedAt);
   }
-
-  return result;
 };
 
 export const getTodayRecord = async (date: string) => {
-  const res = await fetch(`${GAS_URL}?date=${encodeURIComponent(date)}&_=${Date.now()}`, {
-    method: 'GET',
-    cache: 'no-store',
-  });
+  return cachedRequest(`today:${date}`, async () => {
+    const startedAt = performance.now();
+    const label = `GET today ${date}`;
 
-  const result = await parseJsonResponse<{
-    success: boolean;
-    error?: string;
-    record: ApiRecord | null;
-  }>(res);
+    try {
+      const res = await fetch(`${GAS_URL}?date=${encodeURIComponent(date)}`, {
+        method: 'GET',
+        cache: 'no-store',
+      });
 
-  if (!result.success) {
-    throw new Error(result.error || '取得失敗');
-  }
+      const result = await parseJsonResponse<{
+        success: boolean;
+        error?: string;
+        record: ApiRecord | null;
+      }>(res);
 
-  return result.record;
+      if (!result.success) {
+        throw new Error(result.error || '取得失敗');
+      }
+
+      return result.record;
+    } finally {
+      logRequestDuration(label, startedAt);
+    }
+  }, TODAY_REQUEST_TTL_MS);
 };
 
 export const getMonthlyRecords = async (month: string) => {
-  const res = await fetch(`${GAS_URL}?month=${encodeURIComponent(month)}&_=${Date.now()}`, {
-    method: 'GET',
-    cache: 'no-store',
-  });
+  return cachedRequest(`month:${month}`, async () => {
+    const startedAt = performance.now();
+    const label = `GET monthly ${month}`;
 
-  const result = await parseJsonResponse<{
-    success: boolean;
-    error?: string;
-    records: ApiRecord[];
-  }>(res);
+    try {
+      const res = await fetch(`${GAS_URL}?month=${encodeURIComponent(month)}`, {
+        method: 'GET',
+        cache: 'no-store',
+      });
 
-  if (!result.success) {
-    throw new Error(result.error || '月間取得失敗');
+      const result = await parseJsonResponse<{
+        success: boolean;
+        error?: string;
+        records: ApiRecord[];
+      }>(res);
+
+      if (!result.success) {
+        throw new Error(result.error || '月間取得失敗');
+      }
+
+      return result.records;
+    } finally {
+      logRequestDuration(label, startedAt);
+    }
+  }, MONTHLY_REQUEST_TTL_MS);
+};
+
+export const prefetchTodayRecord = async (date: string) => {
+  try {
+    await getTodayRecord(date);
+  } catch (error) {
+    console.warn('[api] prefetch today failed', error);
   }
+};
 
-  return result.records;
+export const prefetchMonthlyRecords = async (month: string) => {
+  try {
+    await getMonthlyRecords(month);
+  } catch (error) {
+    console.warn('[api] prefetch monthly failed', error);
+  }
 };

@@ -52,6 +52,7 @@ export const History: React.FC = () => {
   };
 
   const monthLabel = format(selectedMonth, 'yyyy年M月', { locale: ja });
+  const showInitialLoading = loading && records.length === 0;
 
   return (
     <div className="history-container">
@@ -66,7 +67,7 @@ export const History: React.FC = () => {
       </div>
 
       <div className="records-list">
-        {loading ? (
+        {showInitialLoading ? (
           <div className="no-records">
             <p>読み込み中...</p>
           </div>

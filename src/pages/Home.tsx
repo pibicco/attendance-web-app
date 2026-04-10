@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { format } from 'date-fns';
 import { ja } from 'date-fns/locale';
 import type { TimeRecord } from '../store/attendanceStore';
-import { getTodayRecord, sendToSheet } from '../utils/gas';
+import { getTodayRecord, prefetchMonthlyRecords, sendToSheet } from '../utils/gas';
 import '../styles/Home.css';
 
 type SyncedTimeRecord = TimeRecord & {
@@ -38,6 +38,11 @@ export const Home: React.FC = () => {
   useEffect(() => {
     refreshData();
   }, [refreshData]);
+
+  useEffect(() => {
+    if (!today) return;
+    prefetchMonthlyRecords(today.slice(0, 7));
+  }, [today]);
 
   const handleClockIn = async () => {
     try {

@@ -9,22 +9,19 @@ type Page = 'home' | 'history' | 'monthly';
 function App() {
   const [currentPage, setCurrentPage] = useState<Page>('home');
 
-  const renderPage = () => {
-    switch (currentPage) {
-      case 'home':
-        return <Home />;
-      case 'history':
-        return <History />;
-      case 'monthly':
-        return <Monthly />;
-      default:
-        return <Home />;
-    }
-  };
-
   return (
     <div className="app">
-      <div className="app-content">{renderPage()}</div>
+      <div className="app-content">
+        <div style={{ display: currentPage === 'home' ? 'block' : 'none' }}>
+          <Home />
+        </div>
+        <div style={{ display: currentPage === 'history' ? 'block' : 'none' }}>
+          <History />
+        </div>
+        <div style={{ display: currentPage === 'monthly' ? 'block' : 'none' }}>
+          <Monthly />
+        </div>
+      </div>
       <nav className="app-nav">
         <button
           className={`nav-item ${currentPage === 'home' ? 'active' : ''}`}
