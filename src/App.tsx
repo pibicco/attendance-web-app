@@ -1,26 +1,35 @@
-import { useState } from 'react';
+import { Suspense, lazy, useState } from 'react';
 import { Home } from './pages/Home';
-import { History } from './pages/History';
-import { Monthly } from './pages/Monthly';
 import './App.css';
 
 type Page = 'home' | 'history' | 'monthly';
 
+const History = lazy(() =>
+  import('./pages/History').then((module) => ({ default: module.History }))
+);
+const Monthly = lazy(() =>
+  import('./pages/Monthly').then((module) => ({ default: module.Monthly }))
+);
+
 function App() {
   const [currentPage, setCurrentPage] = useState<Page>('home');
+
+  const renderCurrentPage = () => {
+    if (currentPage === 'home') {
+      return <Home />;
+    }
+
+    return (
+      <Suspense fallback={<div className="page-loading">読み込み中...</div>}>
+        {currentPage === 'history' ? <History /> : <Monthly />}
+      </Suspense>
+    );
+  };
 
   return (
     <div className="app">
       <div className="app-content">
-        <div style={{ display: currentPage === 'home' ? 'block' : 'none' }}>
-          <Home />
-        </div>
-        <div style={{ display: currentPage === 'history' ? 'block' : 'none' }}>
-          <History />
-        </div>
-        <div style={{ display: currentPage === 'monthly' ? 'block' : 'none' }}>
-          <Monthly />
-        </div>
+        {renderCurrentPage()}
       </div>
       <nav className="app-nav">
         <button

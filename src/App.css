@@ -27,6 +27,14 @@ body {
   padding-bottom: 80px;
 }
 
+.page-loading {
+  min-height: 40vh;
+  display: grid;
+  place-items: center;
+  color: #6b7280;
+  font-size: 0.95rem;
+}
+
 .app-nav {
   position: fixed;
   bottom: 0;

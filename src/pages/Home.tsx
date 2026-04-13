@@ -1,48 +1,137 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { format } from 'date-fns';
 import { ja } from 'date-fns/locale';
 import type { TimeRecord } from '../store/attendanceStore';
-import { getTodayRecord, prefetchMonthlyRecords, sendToSheet } from '../utils/gas';
+import { getTodayRecord, sendToSheet } from '../utils/gas';
 import '../styles/Home.css';
 
 type SyncedTimeRecord = TimeRecord & {
   breakStartTime?: string | null;
 };
 
-export const Home: React.FC = () => {
-  const [today, setToday] = useState<string>('');
-  const [todayRecord, setTodayRecord] = useState<SyncedTimeRecord | null>(null);
-  const [loading, setLoading] = useState<boolean>(true);
-  const [submitting, setSubmitting] = useState<boolean>(false);
+const TODAY_CACHE_STORAGE_KEY = 'attendance:today-record-cache';
 
-  const getTodayString = () => {
-    return new Date().toLocaleDateString('sv-SE');
-  };
+type StoredTodayRecord = {
+  date: string;
+  record: SyncedTimeRecord | null;
+};
+
+type StartupMetrics = {
+  cacheReadyMs: number | null;
+  latestSyncMs: number | null;
+  cacheHit: boolean;
+};
+
+type SyncState = 'idle' | 'syncing' | 'success' | 'stale' | 'error';
+
+const getTodayString = () => new Date().toLocaleDateString('sv-SE');
+
+const readStoredTodayRecord = (date: string) => {
+  try {
+    const raw = window.localStorage.getItem(TODAY_CACHE_STORAGE_KEY);
+    if (!raw) return null;
+
+    const parsed = JSON.parse(raw) as StoredTodayRecord;
+    if (parsed.date !== date) return null;
+
+    return parsed.record;
+  } catch (error) {
+    console.warn('ローカルキャッシュの読み込みに失敗:', error);
+    return null;
+  }
+};
+
+const writeStoredTodayRecord = (date: string, record: SyncedTimeRecord | null) => {
+  try {
+    const payload: StoredTodayRecord = { date, record };
+    window.localStorage.setItem(TODAY_CACHE_STORAGE_KEY, JSON.stringify(payload));
+  } catch (error) {
+    console.warn('ローカルキャッシュの保存に失敗:', error);
+  }
+};
+
+export const Home: React.FC = () => {
+  const [initialState] = useState(() => {
+    const today = getTodayString();
+    return {
+      today,
+      record: readStoredTodayRecord(today),
+    };
+  });
+  const mountStartedAtRef = useRef(performance.now());
+
+  const [today, setToday] = useState<string>(initialState.today);
+  const [todayRecord, setTodayRecord] = useState<SyncedTimeRecord | null>(initialState.record);
+  const [loading, setLoading] = useState<boolean>(!initialState.record);
+  const [submitting, setSubmitting] = useState<boolean>(false);
+  const [syncState, setSyncState] = useState<SyncState>('idle');
+  const [syncMessage, setSyncMessage] = useState<string>('');
+  const [startupMetrics, setStartupMetrics] = useState<StartupMetrics>({
+    cacheReadyMs: null,
+    latestSyncMs: null,
+    cacheHit: !!initialState.record,
+  });
 
   const refreshData = useCallback(async () => {
+    const refreshStartedAt = performance.now();
     const dateStr = getTodayString();
     setToday(dateStr);
+    const cachedRecord = readStoredTodayRecord(dateStr);
+    setSyncState('syncing');
+    setSyncMessage(cachedRecord ? '保存済みデータを表示しながら同期中です' : '最新データを取得中です');
+
+    if (cachedRecord) {
+      setTodayRecord(cachedRecord);
+      setLoading(false);
+    } else {
+      setLoading(true);
+    }
 
     try {
-      setLoading(true);
       const record = await getTodayRecord(dateStr);
-      setTodayRecord(record || null);
+      const nextRecord = record || null;
+      setTodayRecord(nextRecord);
+      writeStoredTodayRecord(dateStr, nextRecord);
+      const latestSyncMs = Math.round(performance.now() - refreshStartedAt);
+      setStartupMetrics((prev) => ({
+        ...prev,
+        latestSyncMs,
+        cacheHit: !!cachedRecord,
+      }));
+      setSyncState('success');
+      setSyncMessage(`最新データに同期しました (${latestSyncMs}ms)`);
+      console.info(`[startup] latest sync: ${latestSyncMs}ms`);
     } catch (error) {
       console.error('データ取得失敗:', error);
-      setTodayRecord(null);
+      const message = error instanceof Error ? error.message : '同期に失敗しました';
+      if (!cachedRecord) {
+        setTodayRecord(null);
+        setSyncState('error');
+        setSyncMessage(message);
+      } else {
+        setSyncState('stale');
+        setSyncMessage(`最新同期は保留中です: ${message}`);
+      }
     } finally {
       setLoading(false);
     }
   }, []);
 
   useEffect(() => {
-    refreshData();
-  }, [refreshData]);
+    const cacheReadyMs = Math.round(performance.now() - mountStartedAtRef.current);
+    setStartupMetrics((prev) => ({
+      ...prev,
+      cacheReadyMs,
+      cacheHit: !!initialState.record,
+    }));
+    console.info(
+      `[startup] initial paint: ${cacheReadyMs}ms (${initialState.record ? 'cache hit' : 'cache miss'})`
+    );
+  }, [initialState.record]);
 
   useEffect(() => {
-    if (!today) return;
-    prefetchMonthlyRecords(today.slice(0, 7));
-  }, [today]);
+    refreshData();
+  }, [refreshData]);
 
   const handleClockIn = async () => {
     try {
@@ -187,6 +276,18 @@ export const Home: React.FC = () => {
       <div className="home-header">
         <h1>本日の勤務状況</h1>
         <p className="date-display">{todayFormatted}</p>
+        {syncState !== 'idle' && (
+          <p className={`sync-status sync-status-${syncState}`}>{syncMessage}</p>
+        )}
+        {import.meta.env.DEV && (
+          <p className="startup-metrics">
+            初回表示 {startupMetrics.cacheReadyMs ?? '--'}ms
+            {' / '}
+            最新同期 {startupMetrics.latestSyncMs ?? '--'}ms
+            {' / '}
+            {startupMetrics.cacheHit ? 'cache hit' : 'cache miss'}
+          </p>
+        )}
       </div>
 
       <div className="status-card">

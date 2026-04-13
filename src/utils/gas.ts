@@ -4,6 +4,7 @@ const GAS_URL =
 const TODAY_REQUEST_TTL_MS = 60 * 1000;
 const MONTHLY_REQUEST_TTL_MS = 10 * 60 * 1000;
 const SLOW_REQUEST_THRESHOLD_MS = 1000;
+const TODAY_FETCH_TIMEOUT_MS = 3000;
 
 type ApiRecord = {
   date: string;
@@ -20,6 +21,34 @@ type CacheEntry<T> = {
 };
 
 const responseCache = new Map<string, CacheEntry<unknown>>();
+
+const fetchWithTimeout = async (
+  input: RequestInfo | URL,
+  init: RequestInit,
+  timeoutMs?: number
+) => {
+  if (!timeoutMs) {
+    return fetch(input, init);
+  }
+
+  const controller = new AbortController();
+  const timeoutId = window.setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    return await fetch(input, {
+      ...init,
+      signal: controller.signal,
+    });
+  } catch (error) {
+    if (error instanceof DOMException && error.name === 'AbortError') {
+      throw new Error(`通信が ${timeoutMs}ms を超えたため中断しました`);
+    }
+
+    throw error;
+  } finally {
+    window.clearTimeout(timeoutId);
+  }
+};
 
 const parseJsonResponse = async <T>(res: Response): Promise<T> => {
   const text = await res.text();
@@ -119,10 +148,14 @@ export const getTodayRecord = async (date: string) => {
     const label = `GET today ${date}`;
 
     try {
-      const res = await fetch(`${GAS_URL}?date=${encodeURIComponent(date)}`, {
-        method: 'GET',
-        cache: 'no-store',
-      });
+      const res = await fetchWithTimeout(
+        `${GAS_URL}?date=${encodeURIComponent(date)}`,
+        {
+          method: 'GET',
+          cache: 'no-store',
+        },
+        TODAY_FETCH_TIMEOUT_MS
+      );
 
       const result = await parseJsonResponse<{
         success: boolean;
