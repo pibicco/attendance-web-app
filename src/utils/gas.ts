@@ -20,6 +20,11 @@ type CacheEntry<T> = {
   promise: Promise<T>;
 };
 
+type TodayRecordFetchOptions = {
+  timeoutMs?: number;
+  useCache?: boolean;
+};
+
 const responseCache = new Map<string, CacheEntry<unknown>>();
 
 const fetchWithTimeout = async (
@@ -105,6 +110,36 @@ const logRequestDuration = (label: string, startedAt: number) => {
   console.info(message);
 };
 
+const fetchTodayRecord = async (date: string, timeoutMs?: number) => {
+  const startedAt = performance.now();
+  const label = `GET today ${date}`;
+
+  try {
+    const res = await fetchWithTimeout(
+      `${GAS_URL}?date=${encodeURIComponent(date)}`,
+      {
+        method: 'GET',
+        cache: 'no-store',
+      },
+      timeoutMs
+    );
+
+    const result = await parseJsonResponse<{
+      success: boolean;
+      error?: string;
+      record: ApiRecord | null;
+    }>(res);
+
+    if (!result.success) {
+      throw new Error(result.error || '取得失敗');
+    }
+
+    return result.record;
+  } finally {
+    logRequestDuration(label, startedAt);
+  }
+};
+
 export const sendToSheet = async (data: {
   date: string;
   startTime?: string | null;
@@ -142,36 +177,21 @@ export const sendToSheet = async (data: {
   }
 };
 
-export const getTodayRecord = async (date: string) => {
-  return cachedRequest(`today:${date}`, async () => {
-    const startedAt = performance.now();
-    const label = `GET today ${date}`;
+export const getTodayRecord = async (
+  date: string,
+  options: TodayRecordFetchOptions = {}
+) => {
+  const { timeoutMs = TODAY_FETCH_TIMEOUT_MS, useCache = true } = options;
 
-    try {
-      const res = await fetchWithTimeout(
-        `${GAS_URL}?date=${encodeURIComponent(date)}`,
-        {
-          method: 'GET',
-          cache: 'no-store',
-        },
-        TODAY_FETCH_TIMEOUT_MS
-      );
+  if (!useCache) {
+    return fetchTodayRecord(date, timeoutMs);
+  }
 
-      const result = await parseJsonResponse<{
-        success: boolean;
-        error?: string;
-        record: ApiRecord | null;
-      }>(res);
-
-      if (!result.success) {
-        throw new Error(result.error || '取得失敗');
-      }
-
-      return result.record;
-    } finally {
-      logRequestDuration(label, startedAt);
-    }
-  }, TODAY_REQUEST_TTL_MS);
+  return cachedRequest(
+    `today:${date}`,
+    async () => fetchTodayRecord(date, timeoutMs),
+    TODAY_REQUEST_TTL_MS
+  );
 };
 
 export const getMonthlyRecords = async (month: string) => {

@@ -71,9 +71,28 @@ export const Home: React.FC = () => {
     latestSyncMs: null,
     cacheHit: !!initialState.record,
   });
+  const refreshRequestIdRef = useRef(0);
+
+  const applySyncedRecord = useCallback(
+    (record: SyncedTimeRecord | null, elapsedMs: number, cacheHit: boolean, message: string) => {
+      setTodayRecord(record);
+      writeStoredTodayRecord(getTodayString(), record);
+      setStartupMetrics((prev) => ({
+        ...prev,
+        latestSyncMs: elapsedMs,
+        cacheHit,
+      }));
+      setSyncState('success');
+      setSyncMessage(message);
+      console.info(`[startup] latest sync: ${elapsedMs}ms`);
+    },
+    []
+  );
 
   const refreshData = useCallback(async () => {
     const refreshStartedAt = performance.now();
+    const requestId = refreshRequestIdRef.current + 1;
+    refreshRequestIdRef.current = requestId;
     const dateStr = getTodayString();
     setToday(dateStr);
     const cachedRecord = readStoredTodayRecord(dateStr);
@@ -89,22 +108,60 @@ export const Home: React.FC = () => {
 
     try {
       const record = await getTodayRecord(dateStr);
+      if (refreshRequestIdRef.current !== requestId) return;
+
       const nextRecord = record || null;
-      setTodayRecord(nextRecord);
-      writeStoredTodayRecord(dateStr, nextRecord);
       const latestSyncMs = Math.round(performance.now() - refreshStartedAt);
-      setStartupMetrics((prev) => ({
-        ...prev,
+      applySyncedRecord(
+        nextRecord,
         latestSyncMs,
-        cacheHit: !!cachedRecord,
-      }));
-      setSyncState('success');
-      setSyncMessage(`最新データに同期しました (${latestSyncMs}ms)`);
-      console.info(`[startup] latest sync: ${latestSyncMs}ms`);
+        !!cachedRecord,
+        `最新データに同期しました (${latestSyncMs}ms)`
+      );
     } catch (error) {
       console.error('データ取得失敗:', error);
       const message = error instanceof Error ? error.message : '同期に失敗しました';
-      if (!cachedRecord) {
+      if (refreshRequestIdRef.current !== requestId) return;
+
+      if (message.includes('3000ms')) {
+        setLoading(false);
+        setSyncState(cachedRecord ? 'stale' : 'syncing');
+        setSyncMessage(
+          cachedRecord
+            ? '通信が遅いため、保存済みデータを表示したまま裏で同期を続けています'
+            : '通信が遅いため、裏で再取得しています'
+        );
+
+        void getTodayRecord(dateStr, { timeoutMs: 15000, useCache: false })
+          .then((record) => {
+            if (refreshRequestIdRef.current !== requestId) return;
+
+            const nextRecord = record || null;
+            const latestSyncMs = Math.round(performance.now() - refreshStartedAt);
+            applySyncedRecord(
+              nextRecord,
+              latestSyncMs,
+              !!cachedRecord,
+              `最新データに同期しました (${latestSyncMs}ms / 再取得)`
+            );
+          })
+          .catch((backgroundError) => {
+            if (refreshRequestIdRef.current !== requestId) return;
+
+            console.error('バックグラウンド再取得失敗:', backgroundError);
+            const backgroundMessage =
+              backgroundError instanceof Error ? backgroundError.message : '同期に失敗しました';
+
+            if (!cachedRecord) {
+              setTodayRecord(null);
+              setSyncState('error');
+              setSyncMessage(backgroundMessage);
+            } else {
+              setSyncState('stale');
+              setSyncMessage(`最新同期は保留中です: ${backgroundMessage}`);
+            }
+          });
+      } else if (!cachedRecord) {
         setTodayRecord(null);
         setSyncState('error');
         setSyncMessage(message);
@@ -113,9 +170,11 @@ export const Home: React.FC = () => {
         setSyncMessage(`最新同期は保留中です: ${message}`);
       }
     } finally {
-      setLoading(false);
+      if (refreshRequestIdRef.current === requestId) {
+        setLoading(false);
+      }
     }
-  }, []);
+  }, [applySyncedRecord]);
 
   useEffect(() => {
     const cacheReadyMs = Math.round(performance.now() - mountStartedAtRef.current);
