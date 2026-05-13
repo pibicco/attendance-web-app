@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { format, parse } from 'date-fns';
 import { ja } from 'date-fns/locale';
 import { getMonthlyRecords } from '../utils/gas';
@@ -20,11 +20,14 @@ export const History: React.FC = () => {
 
   const monthKey = format(selectedMonth, 'yyyy-MM');
 
-  useEffect(() => {
-    const refreshHistory = async () => {
+  const refreshHistory = useCallback(
+    async (forceRefresh = false) => {
       try {
         setLoading(true);
-        const result = await getMonthlyRecords(monthKey);
+        const result = await getMonthlyRecords(monthKey, {
+          forceRefresh,
+          useCache: !forceRefresh,
+        });
         setRecords(result || []);
       } catch (error) {
         console.error('履歴取得失敗:', error);
@@ -32,10 +35,13 @@ export const History: React.FC = () => {
       } finally {
         setLoading(false);
       }
-    };
+    },
+    [monthKey]
+  );
 
+  useEffect(() => {
     refreshHistory();
-  }, [monthKey]);
+  }, [refreshHistory]);
 
   const filteredRecords = useMemo(() => {
     return [...records].sort(
@@ -58,6 +64,13 @@ export const History: React.FC = () => {
     <div className="history-container">
       <div className="history-header">
         <h1>勤務履歴</h1>
+        <button
+          className="refresh-button"
+          onClick={() => refreshHistory(true)}
+          disabled={loading}
+        >
+          最新に更新
+        </button>
       </div>
 
       <div className="month-selector">

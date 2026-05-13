@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { format, parse } from 'date-fns';
 import { ja } from 'date-fns/locale';
 import { getMonthlyRecords } from '../utils/gas';
@@ -20,11 +20,14 @@ export const Monthly: React.FC = () => {
 
   const monthKey = format(selectedMonth, 'yyyy-MM');
 
-  useEffect(() => {
-    const refreshMonthlyData = async () => {
+  const refreshMonthlyData = useCallback(
+    async (forceRefresh = false) => {
       try {
         setLoading(true);
-        const result = await getMonthlyRecords(monthKey);
+        const result = await getMonthlyRecords(monthKey, {
+          forceRefresh,
+          useCache: !forceRefresh,
+        });
         setRecords(result || []);
       } catch (error) {
         console.error('月間データ取得失敗:', error);
@@ -32,10 +35,13 @@ export const Monthly: React.FC = () => {
       } finally {
         setLoading(false);
       }
-    };
+    },
+    [monthKey]
+  );
 
+  useEffect(() => {
     refreshMonthlyData();
-  }, [monthKey]);
+  }, [refreshMonthlyData]);
 
   const monthlyStats = useMemo(() => {
     let totalWorkingMinutes = 0;
@@ -90,6 +96,13 @@ export const Monthly: React.FC = () => {
     <div className="monthly-container">
       <div className="monthly-header">
         <h1>月間集計</h1>
+        <button
+          className="refresh-button"
+          onClick={() => refreshMonthlyData(true)}
+          disabled={loading}
+        >
+          最新に更新
+        </button>
       </div>
 
       <div className="month-selector">

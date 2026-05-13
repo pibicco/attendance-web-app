@@ -35,6 +35,29 @@ body {
   font-size: 0.95rem;
 }
 
+.refresh-button {
+  margin-top: 12px;
+  padding: 8px 14px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--code-bg);
+  color: var(--text-h);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.2s, border-color 0.2s, opacity 0.2s;
+}
+
+.refresh-button:hover:not(:disabled) {
+  background: var(--social-bg);
+  border-color: var(--accent);
+}
+
+.refresh-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 .app-nav {
   position: fixed;
   bottom: 0;

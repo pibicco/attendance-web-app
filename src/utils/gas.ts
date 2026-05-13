@@ -23,6 +23,12 @@ type CacheEntry<T> = {
 type TodayRecordFetchOptions = {
   timeoutMs?: number;
   useCache?: boolean;
+  forceRefresh?: boolean;
+};
+
+type MonthlyRecordsFetchOptions = {
+  useCache?: boolean;
+  forceRefresh?: boolean;
 };
 
 const responseCache = new Map<string, CacheEntry<unknown>>();
@@ -110,13 +116,31 @@ const logRequestDuration = (label: string, startedAt: number) => {
   console.info(message);
 };
 
-const fetchTodayRecord = async (date: string, timeoutMs?: number) => {
+const buildApiUrl = (params: Record<string, string>, forceRefresh = false) => {
+  const url = new URL(GAS_URL);
+
+  Object.entries(params).forEach(([key, value]) => {
+    url.searchParams.set(key, value);
+  });
+
+  if (forceRefresh) {
+    url.searchParams.set('_refresh', String(Date.now()));
+  }
+
+  return url;
+};
+
+const fetchTodayRecord = async (
+  date: string,
+  timeoutMs?: number,
+  forceRefresh = false
+) => {
   const startedAt = performance.now();
-  const label = `GET today ${date}`;
+  const label = `GET today ${date}${forceRefresh ? ' fresh' : ''}`;
 
   try {
     const res = await fetchWithTimeout(
-      `${GAS_URL}?date=${encodeURIComponent(date)}`,
+      buildApiUrl({ date }, forceRefresh),
       {
         method: 'GET',
         cache: 'no-store',
@@ -181,10 +205,15 @@ export const getTodayRecord = async (
   date: string,
   options: TodayRecordFetchOptions = {}
 ) => {
-  const { timeoutMs = TODAY_FETCH_TIMEOUT_MS, useCache = true } = options;
+  const {
+    timeoutMs = TODAY_FETCH_TIMEOUT_MS,
+    useCache = true,
+    forceRefresh = false,
+  } = options;
 
-  if (!useCache) {
-    return fetchTodayRecord(date, timeoutMs);
+  if (!useCache || forceRefresh) {
+    invalidateCache(`today:${date}`);
+    return fetchTodayRecord(date, timeoutMs, forceRefresh);
   }
 
   return cachedRequest(
@@ -194,32 +223,48 @@ export const getTodayRecord = async (
   );
 };
 
-export const getMonthlyRecords = async (month: string) => {
-  return cachedRequest(`month:${month}`, async () => {
-    const startedAt = performance.now();
-    const label = `GET monthly ${month}`;
+const fetchMonthlyRecords = async (month: string, forceRefresh = false) => {
+  const startedAt = performance.now();
+  const label = `GET monthly ${month}${forceRefresh ? ' fresh' : ''}`;
 
-    try {
-      const res = await fetch(`${GAS_URL}?month=${encodeURIComponent(month)}`, {
-        method: 'GET',
-        cache: 'no-store',
-      });
+  try {
+    const res = await fetch(buildApiUrl({ month }, forceRefresh), {
+      method: 'GET',
+      cache: 'no-store',
+    });
 
-      const result = await parseJsonResponse<{
-        success: boolean;
-        error?: string;
-        records: ApiRecord[];
-      }>(res);
+    const result = await parseJsonResponse<{
+      success: boolean;
+      error?: string;
+      records: ApiRecord[];
+    }>(res);
 
-      if (!result.success) {
-        throw new Error(result.error || '月間取得失敗');
-      }
-
-      return result.records;
-    } finally {
-      logRequestDuration(label, startedAt);
+    if (!result.success) {
+      throw new Error(result.error || '月間取得失敗');
     }
-  }, MONTHLY_REQUEST_TTL_MS);
+
+    return result.records;
+  } finally {
+    logRequestDuration(label, startedAt);
+  }
+};
+
+export const getMonthlyRecords = async (
+  month: string,
+  options: MonthlyRecordsFetchOptions = {}
+) => {
+  const { useCache = true, forceRefresh = false } = options;
+
+  if (!useCache || forceRefresh) {
+    invalidateCache(`month:${month}`);
+    return fetchMonthlyRecords(month, forceRefresh);
+  }
+
+  return cachedRequest(
+    `month:${month}`,
+    async () => fetchMonthlyRecords(month),
+    MONTHLY_REQUEST_TTL_MS
+  );
 };
 
 export const prefetchTodayRecord = async (date: string) => {

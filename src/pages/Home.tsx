@@ -2,18 +2,11 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { format } from 'date-fns';
 import { ja } from 'date-fns/locale';
 import type { TimeRecord } from '../store/attendanceStore';
-import { getTodayRecord, sendToSheet } from '../utils/gas';
+import { getMonthlyRecords, getTodayRecord, sendToSheet } from '../utils/gas';
 import '../styles/Home.css';
 
 type SyncedTimeRecord = TimeRecord & {
   breakStartTime?: string | null;
-};
-
-const TODAY_CACHE_STORAGE_KEY = 'attendance:today-record-cache';
-
-type StoredTodayRecord = {
-  date: string;
-  record: SyncedTimeRecord | null;
 };
 
 type StartupMetrics = {
@@ -26,28 +19,21 @@ type SyncState = 'idle' | 'syncing' | 'success' | 'stale' | 'error';
 
 const getTodayString = () => new Date().toLocaleDateString('sv-SE');
 
-const readStoredTodayRecord = (date: string) => {
-  try {
-    const raw = window.localStorage.getItem(TODAY_CACHE_STORAGE_KEY);
-    if (!raw) return null;
+const fetchSyncedTodayRecord = async (date: string, forceRefresh = false) => {
+  const monthlyRecords = await getMonthlyRecords(date.slice(0, 7), {
+    forceRefresh,
+    useCache: !forceRefresh,
+  });
+  const monthlyRecord = monthlyRecords.find((record) => record.date === date);
 
-    const parsed = JSON.parse(raw) as StoredTodayRecord;
-    if (parsed.date !== date) return null;
-
-    return parsed.record;
-  } catch (error) {
-    console.warn('ローカルキャッシュの読み込みに失敗:', error);
-    return null;
+  if (monthlyRecord) {
+    return monthlyRecord;
   }
-};
 
-const writeStoredTodayRecord = (date: string, record: SyncedTimeRecord | null) => {
-  try {
-    const payload: StoredTodayRecord = { date, record };
-    window.localStorage.setItem(TODAY_CACHE_STORAGE_KEY, JSON.stringify(payload));
-  } catch (error) {
-    console.warn('ローカルキャッシュの保存に失敗:', error);
-  }
+  return getTodayRecord(date, {
+    forceRefresh,
+    useCache: !forceRefresh,
+  });
 };
 
 export const Home: React.FC = () => {
@@ -55,7 +41,7 @@ export const Home: React.FC = () => {
     const today = getTodayString();
     return {
       today,
-      record: readStoredTodayRecord(today),
+      record: null,
     };
   });
   const mountStartedAtRef = useRef(performance.now());
@@ -65,59 +51,52 @@ export const Home: React.FC = () => {
   const [loading, setLoading] = useState<boolean>(!initialState.record);
   const [submitting, setSubmitting] = useState<boolean>(false);
   const [syncState, setSyncState] = useState<SyncState>('idle');
-  const [syncMessage, setSyncMessage] = useState<string>('');
   const [startupMetrics, setStartupMetrics] = useState<StartupMetrics>({
     cacheReadyMs: null,
     latestSyncMs: null,
     cacheHit: !!initialState.record,
   });
   const refreshRequestIdRef = useRef(0);
+  const todayRecordRef = useRef<SyncedTimeRecord | null>(initialState.record);
 
   const applySyncedRecord = useCallback(
-    (record: SyncedTimeRecord | null, elapsedMs: number, cacheHit: boolean, message: string) => {
+    (record: SyncedTimeRecord | null, elapsedMs: number, cacheHit: boolean) => {
+      todayRecordRef.current = record;
       setTodayRecord(record);
-      writeStoredTodayRecord(getTodayString(), record);
       setStartupMetrics((prev) => ({
         ...prev,
         latestSyncMs: elapsedMs,
         cacheHit,
       }));
       setSyncState('success');
-      setSyncMessage(message);
       console.info(`[startup] latest sync: ${elapsedMs}ms`);
     },
     []
   );
 
-  const refreshData = useCallback(async () => {
+  const refreshData = useCallback(async (forceRefresh = false) => {
     const refreshStartedAt = performance.now();
     const requestId = refreshRequestIdRef.current + 1;
     refreshRequestIdRef.current = requestId;
     const dateStr = getTodayString();
     setToday(dateStr);
-    const cachedRecord = readStoredTodayRecord(dateStr);
+    const cachedRecord = todayRecordRef.current;
     setSyncState('syncing');
-    setSyncMessage(cachedRecord ? '保存済みデータを表示しながら同期中です' : '最新データを取得中です');
 
-    if (cachedRecord) {
+    if (!forceRefresh && cachedRecord) {
       setTodayRecord(cachedRecord);
       setLoading(false);
     } else {
-      setLoading(true);
+      setLoading(!cachedRecord);
     }
 
     try {
-      const record = await getTodayRecord(dateStr);
+      const record = await fetchSyncedTodayRecord(dateStr, forceRefresh);
       if (refreshRequestIdRef.current !== requestId) return;
 
       const nextRecord = record || null;
       const latestSyncMs = Math.round(performance.now() - refreshStartedAt);
-      applySyncedRecord(
-        nextRecord,
-        latestSyncMs,
-        !!cachedRecord,
-        `最新データに同期しました (${latestSyncMs}ms)`
-      );
+      applySyncedRecord(nextRecord, latestSyncMs, !!cachedRecord && !forceRefresh);
     } catch (error) {
       console.error('データ取得失敗:', error);
       const message = error instanceof Error ? error.message : '同期に失敗しました';
@@ -126,48 +105,32 @@ export const Home: React.FC = () => {
       if (message.includes('3000ms')) {
         setLoading(false);
         setSyncState(cachedRecord ? 'stale' : 'syncing');
-        setSyncMessage(
-          cachedRecord
-            ? '通信が遅いため、保存済みデータを表示したまま裏で同期を続けています'
-            : '通信が遅いため、裏で再取得しています'
-        );
 
-        void getTodayRecord(dateStr, { timeoutMs: 15000, useCache: false })
+        void fetchSyncedTodayRecord(dateStr, forceRefresh)
           .then((record) => {
             if (refreshRequestIdRef.current !== requestId) return;
 
             const nextRecord = record || null;
             const latestSyncMs = Math.round(performance.now() - refreshStartedAt);
-            applySyncedRecord(
-              nextRecord,
-              latestSyncMs,
-              !!cachedRecord,
-              `最新データに同期しました (${latestSyncMs}ms / 再取得)`
-            );
+            applySyncedRecord(nextRecord, latestSyncMs, !!cachedRecord);
           })
           .catch((backgroundError) => {
             if (refreshRequestIdRef.current !== requestId) return;
 
             console.error('バックグラウンド再取得失敗:', backgroundError);
-            const backgroundMessage =
-              backgroundError instanceof Error ? backgroundError.message : '同期に失敗しました';
 
             if (!cachedRecord) {
               setTodayRecord(null);
               setSyncState('error');
-              setSyncMessage(backgroundMessage);
             } else {
               setSyncState('stale');
-              setSyncMessage(`最新同期は保留中です: ${backgroundMessage}`);
             }
           });
       } else if (!cachedRecord) {
         setTodayRecord(null);
         setSyncState('error');
-        setSyncMessage(message);
       } else {
         setSyncState('stale');
-        setSyncMessage(`最新同期は保留中です: ${message}`);
       }
     } finally {
       if (refreshRequestIdRef.current === requestId) {
@@ -192,6 +155,10 @@ export const Home: React.FC = () => {
     refreshData();
   }, [refreshData]);
 
+  const handleManualRefresh = () => {
+    void refreshData(true);
+  };
+
   const handleClockIn = async () => {
     try {
       setSubmitting(true);
@@ -208,7 +175,7 @@ export const Home: React.FC = () => {
         breakStartTime: '',
       });
 
-      await refreshData();
+      await refreshData(true);
     } catch (error) {
       console.error('出勤の送信に失敗:', error);
       alert('出勤データの送信に失敗しました');
@@ -235,7 +202,7 @@ export const Home: React.FC = () => {
         breakStartTime: now,
       });
 
-      await refreshData();
+      await refreshData(true);
     } catch (error) {
       console.error('休憩開始の送信に失敗:', error);
       alert('休憩開始データの送信に失敗しました');
@@ -270,7 +237,7 @@ export const Home: React.FC = () => {
         breakStartTime: '',
       });
 
-      await refreshData();
+      await refreshData(true);
     } catch (error) {
       console.error('休憩終了の送信に失敗:', error);
       alert('休憩終了データの送信に失敗しました');
@@ -297,7 +264,7 @@ export const Home: React.FC = () => {
         breakStartTime: '',
       });
 
-      await refreshData();
+      await refreshData(true);
     } catch (error) {
       console.error('退勤の送信に失敗:', error);
       alert('退勤データの送信に失敗しました');
@@ -335,9 +302,13 @@ export const Home: React.FC = () => {
       <div className="home-header">
         <h1>本日の勤務状況</h1>
         <p className="date-display">{todayFormatted}</p>
-        {syncState !== 'idle' && (
-          <p className={`sync-status sync-status-${syncState}`}>{syncMessage}</p>
-        )}
+        <button
+          className="refresh-button"
+          onClick={handleManualRefresh}
+          disabled={loading || submitting || syncState === 'syncing'}
+        >
+          最新に更新
+        </button>
         {import.meta.env.DEV && (
           <p className="startup-metrics">
             初回表示 {startupMetrics.cacheReadyMs ?? '--'}ms
