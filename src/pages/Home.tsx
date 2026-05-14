@@ -9,6 +9,8 @@ type SyncedTimeRecord = TimeRecord & {
   breakStartTime?: string | null;
 };
 
+type AttendancePayload = Parameters<typeof sendToSheet>[0];
+
 type StartupMetrics = {
   cacheReadyMs: number | null;
   latestSyncMs: number | null;
@@ -19,21 +21,22 @@ type SyncState = 'idle' | 'syncing' | 'success' | 'stale' | 'error';
 
 const getTodayString = () => new Date().toLocaleDateString('sv-SE');
 
-const fetchSyncedTodayRecord = async (date: string, forceRefresh = false) => {
-  const monthlyRecords = await getMonthlyRecords(date.slice(0, 7), {
-    forceRefresh,
-    useCache: !forceRefresh,
-  });
-  const monthlyRecord = monthlyRecords.find((record) => record.date === date);
+const recordFetchOpts = (forceRefresh: boolean) => ({
+  forceRefresh,
+  useCache: !forceRefresh,
+});
+
+/** 月次を優先（タイムアウト後の再試行などで使用） */
+const fetchSyncedTodayRecordLegacy = async (dateStr: string, forceRefresh: boolean) => {
+  const opts = recordFetchOpts(forceRefresh);
+  const monthlyRecords = await getMonthlyRecords(dateStr.slice(0, 7), opts);
+  const monthlyRecord = monthlyRecords.find((record) => record.date === dateStr);
 
   if (monthlyRecord) {
     return monthlyRecord;
   }
 
-  return getTodayRecord(date, {
-    forceRefresh,
-    useCache: !forceRefresh,
-  });
+  return getTodayRecord(dateStr, opts);
 };
 
 export const Home: React.FC = () => {
@@ -74,6 +77,16 @@ export const Home: React.FC = () => {
     []
   );
 
+  const applyLocalRecord = useCallback((record: SyncedTimeRecord | null) => {
+    todayRecordRef.current = record;
+    setTodayRecord(record);
+    setLoading(false);
+
+    if (record?.date) {
+      setToday(record.date);
+    }
+  }, []);
+
   const refreshData = useCallback(async (forceRefresh = false) => {
     const refreshStartedAt = performance.now();
     const requestId = refreshRequestIdRef.current + 1;
@@ -91,12 +104,49 @@ export const Home: React.FC = () => {
     }
 
     try {
-      const record = await fetchSyncedTodayRecord(dateStr, forceRefresh);
-      if (refreshRequestIdRef.current !== requestId) return;
+      const opts = recordFetchOpts(forceRefresh);
 
-      const nextRecord = record || null;
-      const latestSyncMs = Math.round(performance.now() - refreshStartedAt);
-      applySyncedRecord(nextRecord, latestSyncMs, !!cachedRecord && !forceRefresh);
+      try {
+        const fromToday = await getTodayRecord(dateStr, opts);
+        if (refreshRequestIdRef.current !== requestId) return;
+
+        if (fromToday) {
+          const fastMs = Math.round(performance.now() - refreshStartedAt);
+          applySyncedRecord(fromToday, fastMs, !!cachedRecord && !forceRefresh);
+          if (refreshRequestIdRef.current === requestId) {
+            setLoading(false);
+          }
+        }
+
+        let monthlyRecord: SyncedTimeRecord | undefined;
+        try {
+          const monthlyRecords = await getMonthlyRecords(dateStr.slice(0, 7), opts);
+          if (refreshRequestIdRef.current !== requestId) return;
+          monthlyRecord = monthlyRecords.find((r) => r.date === dateStr);
+        } catch (monthlyErr) {
+          console.warn('月次データの取得をスキップ:', monthlyErr);
+        }
+
+        if (!fromToday) {
+          const resolved = monthlyRecord ?? null;
+          const ms = Math.round(performance.now() - refreshStartedAt);
+          if (refreshRequestIdRef.current !== requestId) return;
+          applySyncedRecord(resolved, ms, !!cachedRecord && !forceRefresh);
+        } else if (monthlyRecord) {
+          const ms = Math.round(performance.now() - refreshStartedAt);
+          if (refreshRequestIdRef.current !== requestId) return;
+          applySyncedRecord(monthlyRecord, ms, !!cachedRecord && !forceRefresh);
+        }
+      } catch (innerError) {
+        if (refreshRequestIdRef.current !== requestId) return;
+
+        console.warn('今日の行の取得に失敗、月次優先で再試行:', innerError);
+        const record = await fetchSyncedTodayRecordLegacy(dateStr, forceRefresh);
+        if (refreshRequestIdRef.current !== requestId) return;
+
+        const latestSyncMs = Math.round(performance.now() - refreshStartedAt);
+        applySyncedRecord(record ?? null, latestSyncMs, !!cachedRecord && !forceRefresh);
+      }
     } catch (error) {
       console.error('データ取得失敗:', error);
       const message = error instanceof Error ? error.message : '同期に失敗しました';
@@ -106,7 +156,7 @@ export const Home: React.FC = () => {
         setLoading(false);
         setSyncState(cachedRecord ? 'stale' : 'syncing');
 
-        void fetchSyncedTodayRecord(dateStr, forceRefresh)
+        void fetchSyncedTodayRecordLegacy(dateStr, forceRefresh)
           .then((record) => {
             if (refreshRequestIdRef.current !== requestId) return;
 
@@ -159,118 +209,113 @@ export const Home: React.FC = () => {
     void refreshData(true);
   };
 
-  const handleClockIn = async () => {
-    try {
+  const submitOptimisticRecord = useCallback(
+    async (nextRecord: SyncedTimeRecord, errorMessage: string) => {
+      const previousRecord = todayRecordRef.current;
+      const nextPayload: AttendancePayload = {
+        date: nextRecord.date,
+        startTime: nextRecord.startTime ?? '',
+        endTime: nextRecord.endTime ?? '',
+        breakDuration: nextRecord.breakDuration,
+        onBreak: nextRecord.onBreak,
+        breakStartTime: nextRecord.breakStartTime ?? '',
+      };
+
+      refreshRequestIdRef.current += 1;
+      applyLocalRecord(nextRecord);
+      setSyncState('syncing');
       setSubmitting(true);
 
-      const todayStr = getTodayString();
-      const now = format(new Date(), 'HH:mm');
+      try {
+        await sendToSheet(nextPayload);
+        setSubmitting(false);
+        void refreshData(true);
+      } catch (error) {
+        console.error(errorMessage, error);
+        refreshRequestIdRef.current += 1;
+        applyLocalRecord(previousRecord);
+        setSyncState(previousRecord ? 'stale' : 'error');
+        alert(errorMessage);
+        setSubmitting(false);
+      }
+    },
+    [applyLocalRecord, refreshData]
+  );
 
-      await sendToSheet({
+  const handleClockIn = async () => {
+    const todayStr = getTodayString();
+    const now = format(new Date(), 'HH:mm');
+
+    await submitOptimisticRecord(
+      {
         date: todayStr,
         startTime: now,
-        endTime: '',
+        endTime: null,
         breakDuration: 0,
         onBreak: false,
-        breakStartTime: '',
-      });
-
-      await refreshData(true);
-    } catch (error) {
-      console.error('出勤の送信に失敗:', error);
-      alert('出勤データの送信に失敗しました');
-    } finally {
-      setSubmitting(false);
-    }
+        breakStartTime: null,
+      },
+      '出勤データの送信に失敗しました'
+    );
   };
 
   const handleBreakStart = async () => {
     if (!todayRecord) return;
 
-    try {
-      setSubmitting(true);
+    const todayStr = getTodayString();
+    const now = format(new Date(), 'HH:mm');
 
-      const todayStr = getTodayString();
-      const now = format(new Date(), 'HH:mm');
-
-      await sendToSheet({
+    await submitOptimisticRecord(
+      {
+        ...todayRecord,
         date: todayStr,
-        startTime: todayRecord.startTime,
-        endTime: todayRecord.endTime,
-        breakDuration: todayRecord.breakDuration,
         onBreak: true,
         breakStartTime: now,
-      });
-
-      await refreshData(true);
-    } catch (error) {
-      console.error('休憩開始の送信に失敗:', error);
-      alert('休憩開始データの送信に失敗しました');
-    } finally {
-      setSubmitting(false);
-    }
+      },
+      '休憩開始データの送信に失敗しました'
+    );
   };
 
   const handleBreakEnd = async () => {
     if (!todayRecord || !todayRecord.breakStartTime) return;
 
-    try {
-      setSubmitting(true);
+    const todayStr = getTodayString();
+    const now = format(new Date(), 'HH:mm');
 
-      const todayStr = getTodayString();
-      const now = format(new Date(), 'HH:mm');
+    const [startH, startM] = todayRecord.breakStartTime.split(':').map(Number);
+    const [endH, endM] = now.split(':').map(Number);
 
-      const [startH, startM] = todayRecord.breakStartTime.split(':').map(Number);
-      const [endH, endM] = now.split(':').map(Number);
+    let breakMinutes = endH * 60 + endM - (startH * 60 + startM);
+    if (breakMinutes < 0) breakMinutes += 24 * 60;
 
-      let breakMinutes = endH * 60 + endM - (startH * 60 + startM);
-      if (breakMinutes < 0) breakMinutes += 24 * 60;
-
-      const nextBreakDuration = todayRecord.breakDuration + breakMinutes;
-
-      await sendToSheet({
+    await submitOptimisticRecord(
+      {
+        ...todayRecord,
         date: todayStr,
-        startTime: todayRecord.startTime,
-        endTime: todayRecord.endTime,
-        breakDuration: nextBreakDuration,
+        breakDuration: todayRecord.breakDuration + breakMinutes,
         onBreak: false,
-        breakStartTime: '',
-      });
-
-      await refreshData(true);
-    } catch (error) {
-      console.error('休憩終了の送信に失敗:', error);
-      alert('休憩終了データの送信に失敗しました');
-    } finally {
-      setSubmitting(false);
-    }
+        breakStartTime: null,
+      },
+      '休憩終了データの送信に失敗しました'
+    );
   };
 
   const handleClockOut = async () => {
     if (!todayRecord) return;
 
-    try {
-      setSubmitting(true);
+    const todayStr = getTodayString();
+    const now = format(new Date(), 'HH:mm');
 
-      const todayStr = getTodayString();
-      const now = format(new Date(), 'HH:mm');
-
-      await sendToSheet({
+    await submitOptimisticRecord(
+      {
+        ...todayRecord,
         date: todayStr,
-        startTime: todayRecord.startTime,
         endTime: now,
-        breakDuration: todayRecord.breakDuration,
         onBreak: false,
-        breakStartTime: '',
-      });
-
-      await refreshData(true);
-    } catch (error) {
-      console.error('退勤の送信に失敗:', error);
-      alert('退勤データの送信に失敗しました');
-    } finally {
-      setSubmitting(false);
-    }
+        breakStartTime: null,
+      },
+      '退勤データの送信に失敗しました'
+    );
   };
 
   const calculateWorkingHours = () => {
