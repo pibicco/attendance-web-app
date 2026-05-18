@@ -1,4 +1,5 @@
-import { normalizeTime } from './time';
+import { calcWorkMinutes, normalizeTime } from './time';
+import type { TimeRecord } from '../types';
 
 const GAS_URL =
   import.meta.env.VITE_GAS_URL || 'https://flat-poetry-984a.ex24-kpp.workers.dev/';
@@ -12,7 +13,7 @@ type ApiRecord = {
   breakStartTime: string | null;
 };
 
-const normalizeRecord = (record: ApiRecord | null): ApiRecord | null => {
+const normalizeRecord = (record: ApiRecord | null): TimeRecord | null => {
   if (!record) return null;
 
   return {
@@ -26,7 +27,7 @@ const normalizeRecord = (record: ApiRecord | null): ApiRecord | null => {
 };
 
 const TODAY_REQUEST_TTL_MS = 60 * 1000;
-const MONTHLY_REQUEST_TTL_MS = 10 * 60 * 1000;
+const MONTHLY_SUMMARY_TTL_MS = 10 * 60 * 1000;
 const SLOW_REQUEST_THRESHOLD_MS = 1000;
 const TODAY_FETCH_TIMEOUT_MS = 3000;
 
@@ -41,7 +42,7 @@ type TodayRecordFetchOptions = {
   forceRefresh?: boolean;
 };
 
-type MonthlyRecordsFetchOptions = {
+type MonthlySummaryFetchOptions = {
   useCache?: boolean;
   forceRefresh?: boolean;
 };
@@ -109,6 +110,13 @@ const cachedRequest = <T>(key: string, fetcher: () => Promise<T>, ttlMs: number)
   });
 
   return promise;
+};
+
+const setCachedValue = <T>(key: string, value: T, ttlMs: number) => {
+  responseCache.set(key, {
+    expiresAt: Date.now() + ttlMs,
+    promise: Promise.resolve(value),
+  });
 };
 
 const invalidateCache = (keyPrefix: string) => {
@@ -186,7 +194,7 @@ export const sendToSheet = async (data: {
   breakDuration?: number;
   onBreak?: boolean;
   breakStartTime?: string | null;
-}) => {
+}): Promise<TimeRecord | null> => {
   const startedAt = performance.now();
   const label = `POST attendance ${data.date}`;
 
@@ -199,18 +207,27 @@ export const sendToSheet = async (data: {
       body: JSON.stringify(data),
     });
 
-    const result = await parseJsonResponse<{ success: boolean; error?: string }>(res);
+    const result = await parseJsonResponse<{
+      success: boolean;
+      error?: string;
+      record?: ApiRecord | null;
+    }>(res);
 
     if (!result.success) {
       throw new Error(result.error || '送信失敗');
     }
 
-    invalidateCache('today:');
-    invalidateCache(`today:${data.date}`);
-    invalidateCache('month:');
-    invalidateCache(`month:${data.date.slice(0, 7)}`);
+    const record = normalizeRecord(result.record ?? null);
+    const month = data.date.slice(0, 7);
 
-    return result;
+    if (record) {
+      setCachedValue(`today:${data.date}`, record, TODAY_REQUEST_TTL_MS);
+    } else {
+      invalidateCache(`today:${data.date}`);
+    }
+    invalidateCache(`month-summary:${month}`);
+
+    return record;
   } finally {
     logRequestDuration(label, startedAt);
   }
@@ -238,12 +255,12 @@ export const getTodayRecord = async (
   );
 };
 
-const fetchMonthlyRecords = async (month: string, forceRefresh = false) => {
+const fetchMonthlySummary = async (month: string, forceRefresh = false) => {
   const startedAt = performance.now();
-  const label = `GET monthly ${month}${forceRefresh ? ' fresh' : ''}`;
+  const label = `GET monthly-summary ${month}${forceRefresh ? ' fresh' : ''}`;
 
   try {
-    const res = await fetch(buildApiUrl({ month }, forceRefresh), {
+    const res = await fetch(buildApiUrl({ month, summary: '1' }, forceRefresh), {
       method: 'GET',
       cache: 'no-store',
     });
@@ -251,33 +268,54 @@ const fetchMonthlyRecords = async (month: string, forceRefresh = false) => {
     const result = await parseJsonResponse<{
       success: boolean;
       error?: string;
-      records: ApiRecord[];
+      totalMinutes?: number;
+      records?: ApiRecord[];
     }>(res);
 
     if (!result.success) {
-      throw new Error(result.error || '月間取得失敗');
+      throw new Error(result.error || '月間合計の取得失敗');
     }
 
-    return result.records.map((r) => normalizeRecord(r)).filter((r): r is ApiRecord => r !== null);
+    if (typeof result.totalMinutes === 'number') {
+      return result.totalMinutes;
+    }
+
+    // 旧API（全行返却）へのフォールバック
+    if (result.records) {
+      let total = 0;
+      for (const row of result.records) {
+        const record = normalizeRecord(row);
+        if (!record) continue;
+        const minutes = calcWorkMinutes(
+          record.startTime,
+          record.endTime,
+          record.breakDuration
+        );
+        if (minutes != null) total += minutes;
+      }
+      return total;
+    }
+
+    return 0;
   } finally {
     logRequestDuration(label, startedAt);
   }
 };
 
-export const getMonthlyRecords = async (
+export const getMonthlySummary = async (
   month: string,
-  options: MonthlyRecordsFetchOptions = {}
+  options: MonthlySummaryFetchOptions = {}
 ) => {
   const { useCache = true, forceRefresh = false } = options;
 
   if (!useCache || forceRefresh) {
-    invalidateCache(`month:${month}`);
-    return fetchMonthlyRecords(month, forceRefresh);
+    invalidateCache(`month-summary:${month}`);
+    return fetchMonthlySummary(month, forceRefresh);
   }
 
   return cachedRequest(
-    `month:${month}`,
-    async () => fetchMonthlyRecords(month),
-    MONTHLY_REQUEST_TTL_MS
+    `month-summary:${month}`,
+    async () => fetchMonthlySummary(month),
+    MONTHLY_SUMMARY_TTL_MS
   );
 };

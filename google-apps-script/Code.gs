@@ -49,6 +49,10 @@ function handleGet_(e) {
     }
 
     if (params.month) {
+      if (params.summary === '1' || params.summary === 'true') {
+        const totalMinutes = getMonthTotalMinutes_(params.month);
+        return jsonResponse({ success: true, totalMinutes });
+      }
       const records = getRecordsByMonth_(params.month);
       return jsonResponse({ success: true, records });
     }
@@ -62,8 +66,8 @@ function handleGet_(e) {
 function handlePost_(e) {
   try {
     const body = JSON.parse(e.postData.contents);
-    upsertRecord_(body);
-    return jsonResponse({ success: true });
+    const record = upsertRecord_(body);
+    return jsonResponse({ success: true, record });
   } catch (err) {
     return jsonResponse({ success: false, error: String(err) });
   }
@@ -159,6 +163,28 @@ function getRecordsByMonth_(month) {
   return rows.map(rowToRecord_).filter(Boolean);
 }
 
+function calcWorkMinutes_(startTime, endTime, breakMinutes) {
+  const start = formatTimeCell_(startTime);
+  const end = formatTimeCell_(endTime);
+  if (!start || !end) return null;
+
+  const startParts = start.split(':').map(Number);
+  const endParts = end.split(':').map(Number);
+  let minutes = endParts[0] * 60 + endParts[1] - (startParts[0] * 60 + startParts[1]) - (Number(breakMinutes) || 0);
+  if (minutes < 0) minutes += 24 * 60;
+  return minutes;
+}
+
+function getMonthTotalMinutes_(month) {
+  const records = getRecordsByMonth_(month);
+  let total = 0;
+  records.forEach(function (record) {
+    const minutes = calcWorkMinutes_(record.startTime, record.endTime, record.breakDuration);
+    if (minutes != null) total += minutes;
+  });
+  return total;
+}
+
 function upsertRecord_(data) {
   const dateStr = data.date;
   if (!dateStr) throw new Error('date は必須です');
@@ -201,4 +227,13 @@ function upsertRecord_(data) {
       breakStartTime || '',
     ],
   ]);
+
+  return {
+    date: dateStr,
+    startTime: formatTimeCell_(startTime) || null,
+    endTime: formatTimeCell_(endTime) || null,
+    breakDuration: breakDuration,
+    onBreak: onBreak,
+    breakStartTime: formatTimeCell_(breakStartTime) || null,
+  };
 }

@@ -41,7 +41,7 @@ export const Home: React.FC = () => {
     setRecord(next);
     setSubmitting(true);
     try {
-      await sendToSheet({
+      const saved = await sendToSheet({
         date: next.date,
         startTime: next.startTime ?? '',
         endTime: next.endTime ?? '',
@@ -49,7 +49,7 @@ export const Home: React.FC = () => {
         onBreak: next.onBreak,
         breakStartTime: next.breakStartTime ?? '',
       });
-      await loadToday(true);
+      setRecord(saved ?? next);
     } catch (error) {
       console.error(errorMessage, error);
       setRecord(previous);

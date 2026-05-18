@@ -1,15 +1,13 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { format } from 'date-fns';
 import { ja } from 'date-fns/locale';
-import { getMonthlyRecords } from '../utils/gas';
-import { calcWorkMinutes, formatWorkDurationJa } from '../utils/time';
+import { getMonthlySummary } from '../utils/gas';
+import { formatWorkDurationJa } from '../utils/time';
 import '../styles/Monthly.css';
 
 export const Monthly: React.FC = () => {
   const [selectedMonth, setSelectedMonth] = useState(new Date());
-  const [records, setRecords] = useState<
-    Awaited<ReturnType<typeof getMonthlyRecords>>
-  >([]);
+  const [totalMinutes, setTotalMinutes] = useState(0);
   const [loading, setLoading] = useState(true);
 
   const monthKey = format(selectedMonth, 'yyyy-MM');
@@ -17,11 +15,11 @@ export const Monthly: React.FC = () => {
   const loadMonth = useCallback(async () => {
     setLoading(true);
     try {
-      const result = await getMonthlyRecords(monthKey);
-      setRecords(result ?? []);
+      const total = await getMonthlySummary(monthKey);
+      setTotalMinutes(total);
     } catch (error) {
       console.error('月間データ取得失敗:', error);
-      setRecords([]);
+      setTotalMinutes(0);
     } finally {
       setLoading(false);
     }
@@ -30,19 +28,6 @@ export const Monthly: React.FC = () => {
   useEffect(() => {
     void loadMonth();
   }, [loadMonth]);
-
-  const totalMinutes = useMemo(() => {
-    let sum = 0;
-    for (const record of records) {
-      const minutes = calcWorkMinutes(
-        record.startTime,
-        record.endTime,
-        record.breakDuration
-      );
-      if (minutes != null) sum += minutes;
-    }
-    return sum;
-  }, [records]);
 
   const monthLabel = format(selectedMonth, 'yyyy年M月', { locale: ja });
 
