@@ -1,152 +1,80 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { format, parse } from 'date-fns';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { format } from 'date-fns';
 import { ja } from 'date-fns/locale';
 import { getMonthlyRecords } from '../utils/gas';
+import { calcWorkMinutes, formatWorkDurationJa } from '../utils/time';
 import '../styles/Monthly.css';
-
-type MonthlyRecord = {
-  date: string;
-  startTime: string | null;
-  endTime: string | null;
-  breakDuration: number;
-  onBreak: boolean;
-  breakStartTime: string | null;
-};
 
 export const Monthly: React.FC = () => {
   const [selectedMonth, setSelectedMonth] = useState(new Date());
-  const [records, setRecords] = useState<MonthlyRecord[]>([]);
+  const [records, setRecords] = useState<
+    Awaited<ReturnType<typeof getMonthlyRecords>>
+  >([]);
   const [loading, setLoading] = useState(true);
 
   const monthKey = format(selectedMonth, 'yyyy-MM');
 
-  const refreshMonthlyData = useCallback(
-    async (forceRefresh = false) => {
-      try {
-        setLoading(true);
-        const result = await getMonthlyRecords(monthKey, {
-          forceRefresh,
-          useCache: !forceRefresh,
-        });
-        setRecords(result || []);
-      } catch (error) {
-        console.error('月間データ取得失敗:', error);
-        setRecords([]);
-      } finally {
-        setLoading(false);
-      }
-    },
-    [monthKey]
-  );
+  const loadMonth = useCallback(async () => {
+    setLoading(true);
+    try {
+      const result = await getMonthlyRecords(monthKey);
+      setRecords(result ?? []);
+    } catch (error) {
+      console.error('月間データ取得失敗:', error);
+      setRecords([]);
+    } finally {
+      setLoading(false);
+    }
+  }, [monthKey]);
 
   useEffect(() => {
-    refreshMonthlyData();
-  }, [refreshMonthlyData]);
+    void loadMonth();
+  }, [loadMonth]);
 
-  const monthlyStats = useMemo(() => {
-    let totalWorkingMinutes = 0;
-    let workingDays = 0;
-
-    const chartData = records
-      .filter((record) => record.startTime && record.endTime)
-      .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
-      .map((record) => {
-        const [startH, startM] = (record.startTime || '00:00').split(':').map(Number);
-        const [endH, endM] = (record.endTime || '00:00').split(':').map(Number);
-
-        let workingMinutes =
-          endH * 60 + endM - (startH * 60 + startM) - record.breakDuration;
-
-        if (workingMinutes < 0) workingMinutes += 24 * 60;
-
-        totalWorkingMinutes += workingMinutes;
-        workingDays += 1;
-
-        const recordDate = parse(record.date, 'yyyy-MM-dd', new Date());
-        const dayLabel = format(recordDate, 'd日');
-
-        return {
-          date: dayLabel,
-          hours: Math.round((workingMinutes / 60) * 10) / 10,
-        };
-      });
-
-    const avgHours = workingDays > 0 ? totalWorkingMinutes / 60 / workingDays : 0;
-
-    return {
-      workingDays,
-      totalHours: Math.round((totalWorkingMinutes / 60) * 10) / 10,
-      avgHours: Math.round(avgHours * 10) / 10,
-      chartData,
-    };
+  const totalMinutes = useMemo(() => {
+    let sum = 0;
+    for (const record of records) {
+      const minutes = calcWorkMinutes(
+        record.startTime,
+        record.endTime,
+        record.breakDuration
+      );
+      if (minutes != null) sum += minutes;
+    }
+    return sum;
   }, [records]);
 
+  const monthLabel = format(selectedMonth, 'yyyy年M月', { locale: ja });
+
   const handlePrevMonth = () => {
-    setSelectedMonth(new Date(selectedMonth.getFullYear(), selectedMonth.getMonth() - 1, 1));
+    setSelectedMonth(
+      new Date(selectedMonth.getFullYear(), selectedMonth.getMonth() - 1, 1)
+    );
   };
 
   const handleNextMonth = () => {
-    setSelectedMonth(new Date(selectedMonth.getFullYear(), selectedMonth.getMonth() + 1, 1));
+    setSelectedMonth(
+      new Date(selectedMonth.getFullYear(), selectedMonth.getMonth() + 1, 1)
+    );
   };
-
-  const monthLabel = format(selectedMonth, 'yyyy年M月', { locale: ja });
-  const showInitialLoading = loading && records.length === 0;
 
   return (
     <div className="monthly-container">
-      <div className="monthly-header">
-        <h1>月間集計</h1>
-        <button
-          className="refresh-button"
-          onClick={() => refreshMonthlyData(true)}
-          disabled={loading}
-        >
-          最新に更新
+      <div className="month-selector">
+        <button type="button" onClick={handlePrevMonth}>
+          ←
+        </button>
+        <span className="month-label">{monthLabel}</span>
+        <button type="button" onClick={handleNextMonth}>
+          →
         </button>
       </div>
 
-      <div className="month-selector">
-        <button onClick={handlePrevMonth}>← 前月</button>
-        <span className="month-label">{monthLabel}</span>
-        <button onClick={handleNextMonth}>次月 →</button>
-      </div>
-
-      <div className="stats-grid">
-        <div className="stat-card">
-          <div className="stat-label">勤務日数</div>
-          <div className="stat-value">
-            {showInitialLoading ? '...' : `${monthlyStats.workingDays}日`}
-          </div>
-        </div>
-        <div className="stat-card">
-          <div className="stat-label">総労働時間</div>
-          <div className="stat-value">
-            {showInitialLoading ? '...' : `${monthlyStats.totalHours}時間`}
-          </div>
-        </div>
-        <div className="stat-card">
-          <div className="stat-label">平均勤務時間</div>
-          <div className="stat-value">
-            {showInitialLoading ? '...' : `${monthlyStats.avgHours}時間`}
-          </div>
-        </div>
-      </div>
-
-      <div className="chart-container">
-        <h3>日別労働時間</h3>
-        {showInitialLoading ? (
-          <div className="no-data">
-            <p>読み込み中...</p>
-          </div>
-        ) : monthlyStats.chartData.length > 0 ? (
-          <div className="no-data">
-            <p>グラフデータ {monthlyStats.chartData.length}件</p>
-          </div>
-        ) : (
-          <div className="no-data">
-            <p>この月の勤務記録がありません</p>
-          </div>
-        )}
+      <div className="month-total">
+        <p className="month-total-label">合計勤務時間</p>
+        <p className="month-total-value">
+          {loading ? '読み込み中…' : formatWorkDurationJa(totalMinutes)}
+        </p>
       </div>
     </div>
   );

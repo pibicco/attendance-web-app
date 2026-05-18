@@ -1,10 +1,7 @@
-const GAS_URL =
-  'https://flat-poetry-984a.ex24-kpp.workers.dev/';
+import { normalizeTime } from './time';
 
-const TODAY_REQUEST_TTL_MS = 60 * 1000;
-const MONTHLY_REQUEST_TTL_MS = 10 * 60 * 1000;
-const SLOW_REQUEST_THRESHOLD_MS = 1000;
-const TODAY_FETCH_TIMEOUT_MS = 3000;
+const GAS_URL =
+  import.meta.env.VITE_GAS_URL || 'https://flat-poetry-984a.ex24-kpp.workers.dev/';
 
 type ApiRecord = {
   date: string;
@@ -14,6 +11,24 @@ type ApiRecord = {
   onBreak: boolean;
   breakStartTime: string | null;
 };
+
+const normalizeRecord = (record: ApiRecord | null): ApiRecord | null => {
+  if (!record) return null;
+
+  return {
+    ...record,
+    startTime: normalizeTime(record.startTime),
+    endTime: normalizeTime(record.endTime),
+    breakStartTime: normalizeTime(record.breakStartTime),
+    breakDuration: Number(record.breakDuration) || 0,
+    onBreak: record.onBreak === true || String(record.onBreak).toUpperCase() === 'TRUE',
+  };
+};
+
+const TODAY_REQUEST_TTL_MS = 60 * 1000;
+const MONTHLY_REQUEST_TTL_MS = 10 * 60 * 1000;
+const SLOW_REQUEST_THRESHOLD_MS = 1000;
+const TODAY_FETCH_TIMEOUT_MS = 3000;
 
 type CacheEntry<T> = {
   expiresAt: number;
@@ -158,7 +173,7 @@ const fetchTodayRecord = async (
       throw new Error(result.error || '取得失敗');
     }
 
-    return result.record;
+    return normalizeRecord(result.record);
   } finally {
     logRequestDuration(label, startedAt);
   }
@@ -243,7 +258,7 @@ const fetchMonthlyRecords = async (month: string, forceRefresh = false) => {
       throw new Error(result.error || '月間取得失敗');
     }
 
-    return result.records;
+    return result.records.map((r) => normalizeRecord(r)).filter((r): r is ApiRecord => r !== null);
   } finally {
     logRequestDuration(label, startedAt);
   }
@@ -265,20 +280,4 @@ export const getMonthlyRecords = async (
     async () => fetchMonthlyRecords(month),
     MONTHLY_REQUEST_TTL_MS
   );
-};
-
-export const prefetchTodayRecord = async (date: string) => {
-  try {
-    await getTodayRecord(date);
-  } catch (error) {
-    console.warn('[api] prefetch today failed', error);
-  }
-};
-
-export const prefetchMonthlyRecords = async (month: string) => {
-  try {
-    await getMonthlyRecords(month);
-  } catch (error) {
-    console.warn('[api] prefetch monthly failed', error);
-  }
 };

@@ -52,15 +52,43 @@ npm run build
 npm run preview
 ```
 
-## データ連携
+## データ連携（Google スプレッドシート）
 
-勤怠データの送受信は [`src/utils/gas.ts`](/Users/utsunomiyahibiki/pibicco/attendance-web-app-main/src/utils/gas.ts) から行っています。
+対象スプレッドシート: [勤怠管理アプリ](https://docs.google.com/spreadsheets/d/1QajsUci9L_a4HABS5c4qZ6Mu0-9zoBV9I8zxqGYllhk/edit)
+
+| 列 | 項目 |
+| --- | --- |
+| A | 日付 |
+| B | 出勤 |
+| C | 退勤 |
+| D | 休憩分 |
+| E | 勤務時間 |
+| F | 休憩中 |
+| G | 休憩開始 |
+
+月ごとにシート名 `yyyy-MM`（例: `2026-05`）のタブに記録します。
+
+### 初回セットアップ
+
+1. スプレッドシートで **拡張機能 → Apps Script** を開く
+2. [`google-apps-script/Code.gs`](google-apps-script/Code.gs) の内容を貼り付けて保存
+3. **デプロイ → 新しいデプロイ → ウェブアプリ**
+   - 実行ユーザー: 自分
+   - アクセス: 全員
+4. 発行された URL を `.env` に設定:
+
+```bash
+cp .env.example .env
+# VITE_GAS_URL=（デプロイ URL）を編集
+```
+
+5. `npm run dev` で起動
+
+勤怠データの送受信は [`src/utils/gas.ts`](src/utils/gas.ts) から行います。
 
 - `sendToSheet`: 出勤、休憩、退勤データの送信
 - `getTodayRecord`: 当日の勤怠取得
 - `getMonthlyRecords`: 月別勤怠取得
-
-通信先 URL はコード内で固定されています。
 
 ## 画面構成
 
@@ -68,7 +96,7 @@ npm run preview
 - 履歴: 月別の勤務履歴一覧
 - 集計: 月別の勤務集計
 
-画面切り替えは [`src/App.tsx`](/Users/utsunomiyahibiki/pibicco/attendance-web-app-main/src/App.tsx) の下部ナビゲーションで行っています。
+画面切り替えは [`src/App.tsx`](src/App.tsx) の下部ナビゲーションで行っています。
 
 ## デプロイ
 
@@ -79,7 +107,7 @@ npm run preview
 - GitHub Pages に自動デプロイ
 
 ワークフロー定義:
-[`/.github/workflows/deploy.yml`](/Users/utsunomiyahibiki/pibicco/attendance-web-app-main/.github/workflows/deploy.yml)
+[`/.github/workflows/deploy.yml`](.github/workflows/deploy.yml)
 
 ## 補足
 

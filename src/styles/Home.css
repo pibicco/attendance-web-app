@@ -1,102 +1,64 @@
 .home-container {
-  max-width: 600px;
+  max-width: 480px;
   margin: 0 auto;
-  padding: 20px;
-}
-
-.home-header {
-  text-align: center;
-  margin-bottom: 30px;
-}
-
-.home-header h1 {
-  font-size: 24px;
-  color: var(--text-h);
-  margin-bottom: 8px;
+  padding: 24px 20px;
 }
 
 .date-display {
-  font-size: 16px;
+  text-align: center;
+  font-size: 18px;
+  color: var(--text-h);
+  margin-bottom: 28px;
+}
+
+.status-row {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 16px 24px;
+  margin-bottom: 32px;
+  font-size: 15px;
   color: var(--text);
 }
 
-.startup-metrics {
-  margin-top: 8px;
-  font-size: 12px;
-  color: #8b95a7;
-  letter-spacing: 0.02em;
-}
-
-.status-card {
-  background: linear-gradient(135deg, #0a7ea4 0%, #086a8a 100%);
-  border-radius: 12px;
-  padding: 24px;
-  margin-bottom: 24px;
-  color: white;
-}
-
-.status-info {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 16px;
-}
-
-.status-item {
-  text-align: center;
-}
-
-.status-item label {
-  display: block;
-  font-size: 12px;
-  opacity: 0.9;
-  margin-bottom: 8px;
-}
-
-.status-value {
-  font-size: 20px;
-  font-weight: bold;
-}
-
-.status-value.highlight {
-  font-size: 24px;
+.on-break {
+  color: #ff9800;
+  font-weight: 600;
 }
 
 .button-group {
   display: flex;
+  flex-direction: column;
   gap: 12px;
-  margin-bottom: 24px;
 }
 
-.button-group .btn {
-  flex: 1;
-}
-
-.recent-records {
-  background: var(--code-bg);
-  border: 1px solid var(--border);
-  border-radius: 8px;
+.btn {
+  width: 100%;
   padding: 16px;
+  font-size: 18px;
+  font-weight: 600;
+  border: none;
+  border-radius: 10px;
+  cursor: pointer;
 }
 
-.recent-records h3 {
-  font-size: 14px;
-  color: var(--text);
-  margin-bottom: 12px;
+.btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
-.record-item {
-  display: flex;
-  justify-content: space-between;
-  font-size: 14px;
+.btn-primary {
+  background: #0a7ea4;
+  color: white;
+}
+
+.btn-secondary {
+  background: var(--code-bg);
   color: var(--text-h);
+  border: 1px solid var(--border);
 }
 
-@media (max-width: 768px) {
-  .status-info {
-    grid-template-columns: 1fr;
-  }
-
-  .button-group {
-    flex-direction: column;
-  }
+.btn-danger {
+  background: #c62828;
+  color: white;
 }
